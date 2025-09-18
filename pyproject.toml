@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragtester"
+version = "0.1.5"
+description = "Evaluate Retrieval-Augmented Generation systems with LLM-generated tests and judges"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "ABHILASH M S", email = "abhilashms230@gmail.com"}]
+license = "Apache-2.0"
+dependencies = [
+    "sentence-transformers",
+    "chromadb",
+    "openai",
+    "anthropic",
+    "boto3",
+    "numpy",
+    "pandas",
+    "tqdm",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+pdf = ["PyPDF2>=3.0.0"]
+llama = ["llama-cpp-python>=0.2.0"]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ragtester*"]
+
+
