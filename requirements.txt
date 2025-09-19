@@ -1,8 +1,0 @@
-# Core RAG Testing Dependencies
-chromadb>=0.4.0
-sentence-transformers>=2.2.0
-PyPDF2>=3.0.0
-python-docx>=0.8.11
-tqdm>=4.64.0
-python-json-logger>=2.0.0
-requests>=2.28.0
