@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["PyPDF2>=3.0.0"]
 llama = ["llama-cpp-python>=0.2.0"]
+docx = ["python-docx>=0.8.11"]
 
 [tool.setuptools]
 package-dir = {"" = "."}
