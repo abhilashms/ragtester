@@ -4,28 +4,51 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ragtester"
-version = "0.1.5"
+version = "0.1.6"
 description = "Evaluate Retrieval-Augmented Generation systems with LLM-generated tests and judges"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{name = "ABHILASH M S", email = "abhilashms230@gmail.com"}]
 license = "Apache-2.0"
 dependencies = [
-    "sentence-transformers",
-    "chromadb",
-    "openai",
-    "anthropic",
-    "boto3",
-    "numpy",
-    "pandas",
-    "tqdm",
-    "python-dotenv",
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "PyPDF2>=3.0.0",
+    "python-docx>=0.8.11",
+    "tqdm>=4.64.0",
+    "python-json-logger>=2.0.0",
+    "requests>=2.28.0",
 ]
 
 [project.optional-dependencies]
-pdf = ["PyPDF2>=3.0.0"]
-llama = ["llama-cpp-python>=0.2.0"]
-docx = ["python-docx>=0.8.11"]
+# LLM Provider Dependencies
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.7.0"]
+bedrock = ["boto3>=1.26.0"]
+local-transformers = ["transformers>=4.30.0", "torch>=2.0.0"]
+local-llama = ["llama-cpp-python>=0.2.0"]
+
+# Data Processing
+data = ["numpy>=1.24.0", "pandas>=2.0.0"]
+
+# Development
+dev = ["pytest>=7.0.0", "black>=23.0.0", "flake8>=6.0.0", "mypy>=1.0.0"]
+
+# All optional dependencies
+all = [
+    "openai>=1.0.0",
+    "anthropic>=0.7.0", 
+    "boto3>=1.26.0",
+    "transformers>=4.30.0",
+    "torch>=2.0.0",
+    "llama-cpp-python>=0.2.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "."}

@@ -66,11 +66,18 @@ pip install ragtester
 ### With Optional Dependencies
 
 ```bash
-# For local model support (GGUF files)
-pip install ragtester[llama]
+# For specific LLM providers
+pip install ragtester[openai]        # OpenAI API support
+pip install ragtester[anthropic]     # Anthropic API support
+pip install ragtester[bedrock]       # AWS Bedrock support
+pip install ragtester[local-transformers]  # Local transformers models
+pip install ragtester[local-llama]   # Local llama.cpp models
 
-# For PDF processing
-pip install ragtester[pdf]
+# For data processing features
+pip install ragtester[data]          # NumPy and Pandas support
+
+# For development
+pip install ragtester[dev]           # Testing and linting tools
 
 # For all optional features
 pip install ragtester[all]

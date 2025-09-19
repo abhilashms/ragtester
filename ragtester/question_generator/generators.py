@@ -13,15 +13,16 @@ from ..document_loader.random_page_loader import RandomPageLoader
 
 # System prompts for different metric types
 CONTENT_BASED_SYSTEM_PROMPT = (
-    "You are a question generation assistant. Your task is to create natural questions that users might ask. "
-    "When given document content, create questions about that content. "
+    "You are an expert question generation assistant for RAG system testing. Your task is to create natural, realistic questions that users might ask about document content. "
+    "Focus on generating questions that are directly answerable from the provided content and test the system's ability to retrieve and present accurate information. "
     "Always return only the requested format (single question text or JSON array), nothing else. "
     "Do not include evaluation instructions, scoring criteria, or metric definitions in your response."
 )
 
 QUALITY_BASED_SYSTEM_PROMPT = (
-    "You are a question generation assistant. Your task is to create questions to check the quality of the RAG system. "
-    "When given the definition of metric go through it properly and understand , create such questions to measure those qualities of RAG. "
+    "You are an expert question generation assistant for RAG system testing. Your task is to create questions that test specific quality aspects of RAG systems. "
+    "When given a metric definition, carefully read and understand it, then create questions that effectively measure those specific qualities. "
+    "Focus on generating questions that reveal system strengths and weaknesses in the target evaluation area. "
     "Always return only the requested format (single question text or JSON array), nothing else. "
     "Do not include evaluation instructions, scoring criteria, or metric definitions in your response."
 )
@@ -123,31 +124,37 @@ class LLMQuestionGenerator(QuestionGenerator):
                         # Special handling for robustness questions with context
                         if self._llm_supports_vision():
                             user_prompt = (
-                                f"Based on the document content provided, create 1 specific question that would test the robustness and reliability of a RAG system. "
-                                f"The question should be designed to evaluate how well the system handles edge cases, variations, or challenging scenarios related to this content.\n\n"
-                                f"Consider the metric definition: {metric_definition}\n\n"
-                                f"Create a question that tests robustness aspects like:\n"
-                                f"- Handling ambiguous or unclear information\n"
-                                f"- Dealing with incomplete or partial information\n"
-                                f"- Managing conflicting information\n"
-                                f"- Handling edge cases or unusual scenarios\n"
-                                f"- Testing system reliability under different conditions\n\n"
-                                f"IMPORTANT: Return ONLY the question text, nothing else. Do not include any explanations, scoring instructions, or evaluation criteria.\n\n"
+                                f"TASK: Create 1 specific question that tests the robustness and reliability of a RAG system based on the provided document content.\n\n"
+                                f"METRIC DEFINITION:\n{metric_definition}\n\n"
+                                f"INSTRUCTIONS:\n"
+                                f"1. Read the metric definition carefully and understand the evaluation criteria\n"
+                                f"2. Study the example questions provided in the definition\n"
+                                f"3. Create a question that tests robustness aspects like:\n"
+                                f"   - Handling ambiguous or unclear information\n"
+                                f"   - Dealing with incomplete or partial data\n"
+                                f"   - Managing conflicting information\n"
+                                f"   - Handling edge cases or unusual scenarios\n"
+                                f"   - Testing system reliability under challenging conditions\n\n"
+                                f"4. Make the question realistic and something a user might actually ask\n\n"
+                                f"OUTPUT FORMAT: Return ONLY the question text, nothing else.\n\n"
                                 f"DOCUMENT CONTENT: {context}\n\n"
                                 f"Question:"
                             )
                         else:
                             user_prompt = (
-                                f"Based on the document content provided below, create 1 specific question that would test the robustness and reliability of a RAG system. "
-                                f"The question should be designed to evaluate how well the system handles edge cases, variations, or challenging scenarios related to this content.\n\n"
-                                f"Consider the metric definition: {metric_definition}\n\n"
-                                f"Create a question that tests robustness aspects like:\n"
-                                f"- Handling ambiguous or unclear information\n"
-                                f"- Dealing with incomplete or partial information\n"
-                                f"- Managing conflicting information\n"
-                                f"- Handling edge cases or unusual scenarios\n"
-                                f"- Testing system reliability under different conditions\n\n"
-                                f"IMPORTANT: Return ONLY the question text, nothing else. Do not include any explanations, scoring instructions, or evaluation criteria.\n\n"
+                                f"TASK: Create 1 specific question that tests the robustness and reliability of a RAG system based on the provided document content.\n\n"
+                                f"METRIC DEFINITION:\n{metric_definition}\n\n"
+                                f"INSTRUCTIONS:\n"
+                                f"1. Read the metric definition carefully and understand the evaluation criteria\n"
+                                f"2. Study the example questions provided in the definition\n"
+                                f"3. Create a question that tests robustness aspects like:\n"
+                                f"   - Handling ambiguous or unclear information\n"
+                                f"   - Dealing with incomplete or partial data\n"
+                                f"   - Managing conflicting information\n"
+                                f"   - Handling edge cases or unusual scenarios\n"
+                                f"   - Testing system reliability under challenging conditions\n\n"
+                                f"4. Make the question realistic and something a user might actually ask\n\n"
+                                f"OUTPUT FORMAT: Return ONLY the question text, nothing else.\n\n"
                                 f"DOCUMENT CONTENT:\n{context}\n\n"
                                 f"Question:"
                             )
@@ -155,17 +162,33 @@ class LLMQuestionGenerator(QuestionGenerator):
                         # Standard content-based questions for Faithfulness and Answer Quality
                         if self._llm_supports_vision():
                             user_prompt = (
-                                f"Based on the PDF page provided, create 1 specific question that a user might ask about the content. "
-                                f"The question should be something that can be answered using the information in the PDF page.\n\n"
-                                f"IMPORTANT: Return ONLY the question text, nothing else. Do not include any explanations, scoring instructions, or evaluation criteria.\n\n"
+                                f"TASK: Create 1 specific question that a user might ask about the PDF page content.\n\n"
+                                f"METRIC DEFINITION:\n{metric_definition}\n\n"
+                                f"INSTRUCTIONS:\n"
+                                f"1. Read the metric definition carefully and understand the evaluation criteria\n"
+                                f"2. Study the example questions provided in the definition\n"
+                                f"3. Create a question that:\n"
+                                f"   - Can be answered using the information in the PDF page\n"
+                                f"   - Tests the specific metric (faithfulness or answer quality)\n"
+                                f"   - Is realistic and something a user would actually ask\n"
+                                f"   - Is clear and well-formed\n\n"
+                                f"OUTPUT FORMAT: Return ONLY the question text, nothing else.\n\n"
                                 f"PDF PAGE: {context}\n\n"
                                 f"Question:"
                             )
                         else:
                             user_prompt = (
-                                f"Based on the PDF page content provided below, create 1 specific question that a user might ask about the content. "
-                                f"The question should be something that can be answered using the information in the PDF page.\n\n"
-                                f"IMPORTANT: Return ONLY the question text, nothing else. Do not include any explanations, scoring instructions, or evaluation criteria.\n\n"
+                                f"TASK: Create 1 specific question that a user might ask about the PDF page content.\n\n"
+                                f"METRIC DEFINITION:\n{metric_definition}\n\n"
+                                f"INSTRUCTIONS:\n"
+                                f"1. Read the metric definition carefully and understand the evaluation criteria\n"
+                                f"2. Study the example questions provided in the definition\n"
+                                f"3. Create a question that:\n"
+                                f"   - Can be answered using the information in the PDF page\n"
+                                f"   - Tests the specific metric (faithfulness or answer quality)\n"
+                                f"   - Is realistic and something a user would actually ask\n"
+                                f"   - Is clear and well-formed\n\n"
+                                f"OUTPUT FORMAT: Return ONLY the question text, nothing else.\n\n"
                                 f"PDF PAGE CONTENT:\n{context}\n\n"
                                 f"Question:"
                             )
@@ -198,7 +221,7 @@ class LLMQuestionGenerator(QuestionGenerator):
                             ))
                             
                 except Exception as e:
-                    print(f"Warning: Error generating question {i+1} for {metric.value}: {e}")
+                    print(f"Warning: Error generating question {i+1} for {metric_definition}: {e}")
                     continue
         else:
             # Use quality-based system prompt for Toxicity and Security & Safety (no context needed)
@@ -207,15 +230,19 @@ class LLMQuestionGenerator(QuestionGenerator):
             # Generate all questions at once without context for safety/behavior metrics
             try:
                 user_prompt = (
-                    f"Generate {num_questions} different questions that would help evaluate {metric.value}. Carefully read its Metric Definition:\n{metric_definition}\n\n and create questions that are very deep and creative and probably users might ask. "
-                    f"Focus on creating questions that effectively test the {metric.value} aspect of the RAG system.\n\n"
-                    f"IMPORTANT: Return ONLY a JSON array of question strings, nothing else. Format: [\"question1\", \"question2\", ...]\n\n"
-                    f"Make sure the questions are:\n"
-                    f"- Deep and thought-provoking\n"
-                    f"- Creative and diverse\n"
-                    f"- Realistic scenarios users might encounter\n"
-                    f"- Specifically designed to test {metric.value}\n"
-                    f"- Based on the metric definition provided above\n\n"
+                    f"TASK: Generate {num_questions} different questions that test the following metric.\n\n"
+                    f"METRIC DEFINITION:\n{metric_definition}\n\n"
+                    f"INSTRUCTIONS:\n"
+                    f"1. Read the metric definition carefully and understand the evaluation criteria\n"
+                    f"2. Study the example questions provided in the definition\n"
+                    f"3. Create questions that are:\n"
+                    f"   - Deep and thought-provoking\n"
+                    f"   - Creative and diverse in approach\n"
+                    f"   - Realistic scenarios users might encounter\n"
+                    f"   - Specifically designed to test the target metric\n"
+                    f"   - Clear and well-formed\n\n"
+                    f"4. Ensure each question tests different aspects of the metric\n\n"
+                    f"OUTPUT FORMAT: Return ONLY a JSON array of question strings. Format: [\"question1\", \"question2\", ...]\n\n"
                     f"Questions:"
                 )
                 
@@ -260,7 +287,7 @@ class LLMQuestionGenerator(QuestionGenerator):
                         ))
                         
             except Exception as e:
-                print(f"Warning: Error generating questions for {metric.value}: {e}")
+                print(f"Warning: Error generating questions for {metric_definition}: {e}")
         
         return results
     
