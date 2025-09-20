@@ -9,6 +9,7 @@ from ..config import RAGTestConfig
 from ..types import LLMMessage, Question, TestCategory, EvaluationMetric
 from ..evaluator.metrics_judge import MetricsResponseJudge
 from ..document_loader.random_page_loader import RandomPageLoader
+from ..logging_utils import get_logger
 
 
 # System prompts for different metric types
@@ -43,6 +44,13 @@ SECURITY_SAFETY_SYSTEM_PROMPT = (
 class LLMQuestionGenerator(QuestionGenerator):
     def __init__(self, config: RAGTestConfig) -> None:
         self.config = config
+        self.logger = get_logger()
+        
+        self.logger.info(f"Initializing LLMQuestionGenerator with provider: {config.llm.provider}")
+        self.logger.info(f"Model: {config.llm.model}")
+        self.logger.info(f"Temperature: {config.llm.temperature}")
+        self.logger.info(f"Max tokens: {config.llm.max_tokens}")
+        
         self.llm = build_llm(
             self.config.llm.provider,
             model=self.config.llm.model,
@@ -53,6 +61,7 @@ class LLMQuestionGenerator(QuestionGenerator):
             **self.config.llm.extra,
         )
         self.random_page_loader = RandomPageLoader(max_words_per_page=300)
+        self.logger.info("LLMQuestionGenerator initialized successfully")
 
     
     def _prepare_single_random_context(self, document_paths: List[str]) -> str:
@@ -145,16 +154,22 @@ class LLMQuestionGenerator(QuestionGenerator):
         - Faithfulness & Answer Quality: Use context from documents
         - Toxicity, Robustness & Reliability, Security & Safety: Generate general questions without context
         """
+        self.logger.info(f"=== Generating {num_questions} questions for metric: {metric} ===")
+        self.logger.info(f"Document paths: {document_paths}")
+        self.logger.info(f"Seed: {seed}, Pages: {num_pages}")
+        
         random.seed(seed)
         
         # Get the metric definition from metrics_judge.py
         metric_definition = self._get_metric_definition(metric)
+        self.logger.info(f"Metric definition: {metric_definition}")
         
         results: List[Question] = []
         
         # Check if this metric needs context (Faithfulness, Answer Quality, and Robustness & Reliability)
         context_required_metrics = {EvaluationMetric.FAITHFULNESS, EvaluationMetric.ANSWER_QUALITY, EvaluationMetric.ROBUSTNESS_RELIABILITY}
         needs_context = metric in context_required_metrics
+        self.logger.info(f"Needs context: {needs_context}")
         
         if needs_context:
             # Use appropriate system prompt based on metric type
@@ -165,9 +180,11 @@ class LLMQuestionGenerator(QuestionGenerator):
             
             # Generate each question individually with its own random context
             for i in range(num_questions):
+                self.logger.info(f"--- Generating question {i+1}/{num_questions} ---")
                 try:
                     # Generate a new random context for each question (single page)
                     context = self._prepare_single_random_context(document_paths)
+                    self.logger.debug(f"Generated context (first 200 chars): {context[:200]}...")
                     
                     # Simplified prompt for all context-based metrics
                     user_prompt = (
@@ -179,62 +196,100 @@ class LLMQuestionGenerator(QuestionGenerator):
                         f"Your question:"
                     )
                     
+                    self.logger.debug(f"User prompt (first 300 chars): {user_prompt[:300]}...")
+                    
                     messages: List[LLMMessage] = [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ]
+                    
+                    self.logger.log_llm_request(
+                        self.config.llm.provider,
+                        self.config.llm.model,
+                        messages,
+                        temperature=self.config.llm.temperature,
+                        max_tokens=self.config.llm.max_tokens
+                    )
+                    
                     raw = self.llm.chat(messages)
+                    self.logger.log_llm_response(raw)
 
                     # Parse the response - expect a single question string
-                    question_text = raw.strip()
+                    question_text = raw.strip() if raw else ""
+                    self.logger.debug(f"Raw response: '{raw}'")
+                    self.logger.debug(f"Stripped question text: '{question_text}'")
                     
                     # Clean up the question text
                     if question_text:
+                        self.logger.debug("Cleaning up question text...")
+                        
                         # Remove any JSON formatting if present
                         if question_text.startswith('"') and question_text.endswith('"'):
                             question_text = question_text[1:-1]
+                            self.logger.debug(f"Removed quotes: '{question_text}'")
                         if question_text.startswith("'") and question_text.endswith("'"):
                             question_text = question_text[1:-1]
+                            self.logger.debug(f"Removed single quotes: '{question_text}'")
                         
                         # Remove any array brackets
                         question_text = question_text.replace('[', '').replace(']', '')
+                        self.logger.debug(f"Removed brackets: '{question_text}'")
                         
                         # Extract only the first question if multiple questions are returned
                         lines = question_text.split('\n')
+                        self.logger.debug(f"Split into lines: {lines}")
+                        
                         first_question = None
-                        for line in lines:
+                        for line_idx, line in enumerate(lines):
                             line = line.strip()
+                            self.logger.debug(f"Processing line {line_idx}: '{line}'")
                             
                             # Clean up emojis and special characters at the start
                             import re
                             cleaned_line = re.sub(r'^[^\w\s]*', '', line)  # Remove leading non-word characters
                             cleaned_line = cleaned_line.strip()
+                            self.logger.debug(f"Cleaned line: '{cleaned_line}'")
                             
-                            # Look for lines that are actual questions (end with ? and contain question words)
-                            if (cleaned_line and cleaned_line.endswith('?') and len(cleaned_line) > 10 and 
-                                any(word in cleaned_line.lower() for word in ['what', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'is', 'are', 'do', 'does', 'did', 'will', 'would', 'could', 'should'])):
+                            # Look for lines that are actual questions
+                            question_words = ['what', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'is', 'are', 'do', 'does', 'did', 'will', 'would', 'could', 'should']
+                            has_question_word = any(word in cleaned_line.lower() for word in question_words)
+                            ends_with_question = cleaned_line.endswith('?')
+                            is_long_enough = len(cleaned_line) > 10
+                            
+                            self.logger.debug(f"Question validation - ends with ?: {ends_with_question}, has question word: {has_question_word}, long enough: {is_long_enough}")
+                            
+                            if (cleaned_line and ends_with_question and is_long_enough and has_question_word):
                                 # Clean up any remaining prefixes
                                 clean_line = self._clean_question_text(cleaned_line)
+                                self.logger.debug(f"Final cleaned question: '{clean_line}'")
                                 if clean_line:
                                     first_question = clean_line
                                     break
                         
                         if first_question:
                             question_text = first_question
+                            self.logger.info(f"✅ Valid question found: '{question_text}'")
                         else:
                             # Fallback: if no proper question found, skip this attempt
-                            print(f"Warning: No valid question found in response: {raw[:100]}...")
+                            self.logger.warning(f"❌ No valid question found in response: {raw[:100]}...")
+                            self.logger.warning(f"Full response was: '{raw}'")
                             continue
                         
                         if question_text and question_text.strip():
-                            results.append(Question(
+                            question_obj = Question(
                                 text=question_text.strip(), 
                                 category=TestCategory(metric.value),
                                 context_used=context  # Store the context that was used to generate this question
-                            ))
+                            )
+                            results.append(question_obj)
+                            self.logger.info(f"✅ Added question to results: {question_obj}")
+                        else:
+                            self.logger.warning("Question text is empty after processing")
+                    else:
+                        self.logger.warning("No question text received from LLM")
                             
                 except Exception as e:
-                    print(f"Warning: Error generating question {i+1} for {metric_definition}: {e}")
+                    self.logger.error(f"❌ Error generating question {i+1} for {metric_definition}: {e}", exc_info=True)
                     continue
         else:
             # Use specialized system prompts for Toxicity and Security & Safety (no context needed)

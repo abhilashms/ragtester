@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+import logging
 
 from .types import TestCategory
 
@@ -48,11 +49,26 @@ class EvaluationWeights:
 
 
 @dataclass
+class LoggingConfig:
+    """Configuration for logging behavior in RAG testing."""
+    enabled: bool = True
+    level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
+    log_to_file: bool = True
+    log_file_path: str = "rag_test_debug.log"
+    log_to_console: bool = True
+    log_llm_requests: bool = True
+    log_llm_responses: bool = True
+    log_question_generation: bool = True
+    log_document_processing: bool = True
+
+
+@dataclass
 class RAGTestConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     rag_client: RAGClientConfig = field(default_factory=RAGClientConfig)
     generation: GenerationPlan = field(default_factory=GenerationPlan)
     evaluation_weights: EvaluationWeights = field(default_factory=EvaluationWeights)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
     seed: int = 42
     allow_network: bool = True
 

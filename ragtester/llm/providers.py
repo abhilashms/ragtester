@@ -5,6 +5,7 @@ from typing import Any, Dict, Sequence
 
 from .base import LLMProvider
 from ..types import LLMMessage
+from .logging_wrapper import LoggingLLMWrapper
 
 
 class DummyLLM(LLMProvider):
@@ -16,48 +17,58 @@ class DummyLLM(LLMProvider):
 
 def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
     name = (provider_name or "").lower()
+    model_name = kwargs.get('model', 'unknown')
+    
     if name in ("", "dummy"):
-        return DummyLLM()
+        provider = DummyLLM()
+        return LoggingLLMWrapper(provider, "dummy", model_name)
+    
     try:
         if name == "openai":
             from .providers_openai import OpenAIChat
-            return OpenAIChat(**kwargs)
-        if name == "anthropic":
+            provider = OpenAIChat(**kwargs)
+        elif name == "anthropic":
             from .providers_anthropic import AnthropicChat
-            return AnthropicChat(**kwargs)
-        if name == "grok":
+            provider = AnthropicChat(**kwargs)
+        elif name == "grok":
             from .providers_grok import GrokChat
-            return GrokChat(**kwargs)
-        if name == "gemini":
+            provider = GrokChat(**kwargs)
+        elif name == "gemini":
             from .providers_gemini import GeminiChat
-            return GeminiChat(**kwargs)
-        if name == "mistral":
+            provider = GeminiChat(**kwargs)
+        elif name == "mistral":
             from .providers_mistral import MistralChat
-            return MistralChat(**kwargs)
-        if name == "cohere":
+            provider = MistralChat(**kwargs)
+        elif name == "cohere":
             from .providers_cohere import CohereChat
-            return CohereChat(**kwargs)
-        if name == "huggingface":
+            provider = CohereChat(**kwargs)
+        elif name == "huggingface":
             from .providers_huggingface import HuggingFaceChat
-            return HuggingFaceChat(**kwargs)
-        if name == "fireworks":
+            provider = HuggingFaceChat(**kwargs)
+        elif name == "fireworks":
             from .providers_fireworks import FireworksChat
-            return FireworksChat(**kwargs)
-        if name == "together":
+            provider = FireworksChat(**kwargs)
+        elif name == "together":
             from .providers_together import TogetherChat
-            return TogetherChat(**kwargs)
-        if name == "perplexity":
+            provider = TogetherChat(**kwargs)
+        elif name == "perplexity":
             from .providers_perplexity import PerplexityChat
-            return PerplexityChat(**kwargs)
-        if name == "local":
+            provider = PerplexityChat(**kwargs)
+        elif name == "local":
             from .providers_local import LocalLLM
-            return LocalLLM(**kwargs)
-        if name == "bedrock":
+            provider = LocalLLM(**kwargs)
+        elif name == "bedrock":
             from .providers_bedrock import BedrockLLM
-            return BedrockLLM(**kwargs)
-    except Exception:
+            provider = BedrockLLM(**kwargs)
+        else:
+            raise ValueError(f"Unknown provider: {name}")
+        
+        # Wrap with logging
+        return LoggingLLMWrapper(provider, name, model_name)
+        
+    except Exception as e:
         # Fallback to dummy if provider not installed or fails to init
-        return DummyLLM()
-    return DummyLLM()
+        provider = DummyLLM()
+        return LoggingLLMWrapper(provider, "dummy", model_name)
 
 

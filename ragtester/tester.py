@@ -12,11 +12,16 @@ from .question_generator.generators import LLMQuestionGenerator
 from .rag_client import CallableRAGClient, RESTRAGClient, RAGClient
 from .reporter import export_csv, export_html, export_markdown, to_console, to_json
 from .types import CategoryScorecard, Evaluation, Question, RAGResponse, TestCategory, TestResults
+from .logging_utils import configure_logging
 
 
 class RAGTester:
     def __init__(self, rag_api_url: Optional[str] = None, rag_callable: Optional[callable] = None, config: Optional[RAGTestConfig] = None) -> None:
         self.config = config or RAGTestConfig()
+        
+        # Configure logging first
+        configure_logging(self.config.logging)
+        
         self.documents: List[dict] = []
         self.document_paths: List[str] = []
         # Prepare RAG client
