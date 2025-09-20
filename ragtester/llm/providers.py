@@ -67,7 +67,12 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
         return LoggingLLMWrapper(provider, name, model_name)
         
     except Exception as e:
-        # Fallback to dummy if provider not installed or fails to init
+        # Log the error and fallback to dummy if provider not installed or fails to init
+        import logging
+        logger = logging.getLogger("ragtester")
+        logger.error(f"Failed to initialize {name} provider: {e}")
+        logger.warning(f"Falling back to dummy provider. Check your configuration and dependencies.")
+        
         provider = DummyLLM()
         return LoggingLLMWrapper(provider, "dummy", model_name)
 

@@ -32,7 +32,7 @@ class BedrockLLM(LLMProvider):
         """Initialize the Bedrock client."""
         try:
             import boto3
-            from botocore.exceptions import ClientError
+            from botocore.exceptions import ClientError, NoCredentialsError
             
             # Initialize Bedrock client
             self._client = boto3.client(
@@ -52,7 +52,15 @@ class BedrockLLM(LLMProvider):
                     print(f"Available models: {available_models[:5]}...")  # Show first 5 models
                     
             except ClientError as e:
-                print(f"Warning: Could not verify model availability: {e}")
+                error_code = e.response['Error']['Code']
+                if error_code == 'AccessDeniedException':
+                    raise RuntimeError(f"Access denied to Bedrock in region {self.region}. Check your IAM permissions.")
+                elif error_code == 'UnauthorizedOperation':
+                    raise RuntimeError(f"Unauthorized operation. Check your AWS credentials and permissions.")
+                else:
+                    print(f"Warning: Could not verify model availability: {e}")
+            except NoCredentialsError:
+                raise RuntimeError("AWS credentials not found. Please configure AWS credentials.")
                 
         except ImportError:
             raise ImportError(
