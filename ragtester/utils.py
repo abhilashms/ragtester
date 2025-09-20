@@ -4,7 +4,7 @@ Utility functions for ragtester library.
 
 import os
 import sys
-from typing import Optional
+from typing import Optional, List
 
 
 def check_llama_cpp_installation() -> tuple[bool, Optional[str]]:
@@ -162,3 +162,70 @@ tester.print_summary(results)
 """)
     
     print(suggest_llm_provider_alternatives())
+
+
+def normalize_document_paths(paths: List[str]) -> List[str]:
+    """
+    Normalize document paths for cross-platform compatibility.
+    
+    This function ensures that document paths work correctly on both Windows and Linux systems.
+    It handles relative paths, parent directory references, and normalizes path separators.
+    
+    Args:
+        paths: List of document file paths (can be relative or absolute)
+        
+    Returns:
+        List of normalized absolute paths with forward slashes
+        
+    Examples:
+        # Windows paths
+        normalize_document_paths(["C:\\Users\\Documents\\file.pdf"])
+        # Returns: ["C:/Users/Documents/file.pdf"]
+        
+        # Linux paths  
+        normalize_document_paths(["/home/user/documents/file.pdf"])
+        # Returns: ["/home/user/documents/file.pdf"]
+        
+        # Relative paths
+        normalize_document_paths(["./documents/file.pdf", "../data/file.txt"])
+        # Returns: ["/current/dir/documents/file.pdf", "/parent/dir/data/file.txt"]
+        
+        # Mixed paths
+        normalize_document_paths(["D:\\data\\file.pdf", "/tmp/file.txt", "./local/file.docx"])
+        # Returns: ["D:/data/file.pdf", "/tmp/file.txt", "/current/dir/local/file.docx"]
+    """
+    normalized_paths = []
+    for path in paths:
+        if not path:  # Handle empty paths
+            continue
+            
+        # Convert to absolute path (resolves relative paths, .., and .)
+        abs_path = os.path.abspath(path)
+        # Normalize path separators to forward slashes for consistency
+        normalized = abs_path.replace("\\", "/")
+        normalized_paths.append(normalized)
+    return normalized_paths
+
+
+def validate_document_paths(paths: List[str]) -> tuple[bool, List[str], List[str]]:
+    """
+    Validate document paths and return information about valid and invalid paths.
+    
+    Args:
+        paths: List of document file paths to validate
+        
+    Returns:
+        Tuple of (all_valid, valid_paths, invalid_paths)
+    """
+    valid_paths = []
+    invalid_paths = []
+    
+    for path in paths:
+        normalized_path = os.path.abspath(path)
+        if os.path.isfile(normalized_path):
+            valid_paths.append(normalized_path.replace("\\", "/"))
+        else:
+            invalid_paths.append(path)
+    
+    all_valid = len(invalid_paths) == 0
+    return all_valid, valid_paths, invalid_paths

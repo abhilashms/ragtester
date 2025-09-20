@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Iterable, List
 
-from .base import DocumentLoader, make_document_id
+from .base import DocumentLoader, make_document_id, normalize_path
 from ..types import Document
 
 
@@ -11,15 +11,17 @@ class TextFileLoader(DocumentLoader):
     def load(self, paths: Iterable[str]) -> List[Document]:
         documents: List[Document] = []
         for path in paths:
-            if not os.path.isfile(path):
+            # Normalize path for cross-platform compatibility
+            normalized_path = normalize_path(path)
+            if not os.path.isfile(normalized_path):
                 continue
             if not path.lower().endswith((".txt", ".md", ".rst")):
                 continue
             try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(normalized_path, "r", encoding="utf-8", errors="ignore") as f:
                     text = f.read()
                 documents.append(
-                    Document(id=make_document_id(path), path=path, text=text, meta={"type": "text"})
+                    Document(id=make_document_id(path), path=normalized_path, text=text, meta={"type": "text"})
                 )
             except Exception:
                 # Skip unreadable files
@@ -44,10 +46,12 @@ class PDFFileLoader(DocumentLoader):
         import PyPDF2  # type: ignore
 
         for path in paths:
-            if not os.path.isfile(path) or not path.lower().endswith(".pdf"):
+            # Normalize path for cross-platform compatibility
+            normalized_path = normalize_path(path)
+            if not os.path.isfile(normalized_path) or not path.lower().endswith(".pdf"):
                 continue
             try:
-                with open(path, "rb") as f:
+                with open(normalized_path, "rb") as f:
                     reader = PyPDF2.PdfReader(f)
                     texts = []
                     for page in getattr(reader, "pages", []):
@@ -57,7 +61,7 @@ class PDFFileLoader(DocumentLoader):
                             continue
                     text = "\n".join(texts)
                 documents.append(
-                    Document(id=make_document_id(path), path=path, text=text, meta={"type": "pdf"})
+                    Document(id=make_document_id(path), path=normalized_path, text=text, meta={"type": "pdf"})
                 )
             except Exception:
                 continue
@@ -81,17 +85,19 @@ class DOCXFileLoader(DocumentLoader):
         import docx  # type: ignore
 
         for path in paths:
-            if not os.path.isfile(path) or not path.lower().endswith(".docx"):
+            # Normalize path for cross-platform compatibility
+            normalized_path = normalize_path(path)
+            if not os.path.isfile(normalized_path) or not path.lower().endswith(".docx"):
                 continue
             try:
-                doc = docx.Document(path)
+                doc = docx.Document(normalized_path)
                 texts = []
                 for paragraph in doc.paragraphs:
                     if paragraph.text.strip():
                         texts.append(paragraph.text.strip())
                 text = "\n".join(texts)
                 documents.append(
-                    Document(id=make_document_id(path), path=path, text=text, meta={"type": "docx"})
+                    Document(id=make_document_id(path), path=normalized_path, text=text, meta={"type": "docx"})
                 )
             except Exception:
                 continue
