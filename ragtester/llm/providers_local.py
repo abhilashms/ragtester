@@ -158,7 +158,8 @@ class LocalLLM(LLMProvider):
         if hasattr(self._model, 'create_completion'):
             # llama-cpp-python format
             response = self._model.create_completion(prompt, **gen_params)
-            return response['choices'][0]['text'].strip()
+            result = response['choices'][0]['text'].strip()
+            return result
         
         else:
             # transformers format
@@ -178,19 +179,21 @@ class LocalLLM(LLMProvider):
             return response.strip()
     
     def _format_messages(self, messages: Sequence[LLMMessage]) -> str:
-        """Convert message sequence to prompt format."""
-        prompt_parts = []
+        """Convert message sequence to prompt format for Vicuna models."""
+        # Vicuna chat format
+        prompt = ""
         
         for message in messages:
             role = message["role"]
             content = message["content"]
             
             if role == "system":
-                prompt_parts.append(f"System: {content}")
+                # Include system message in the first user message
+                prompt += f"USER: {content}\n\n"
             elif role == "user":
-                prompt_parts.append(f"Human: {content}")
+                prompt += f"USER: {content}\n\n"
             elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
+                prompt += f"ASSISTANT: {content}\n\n"
         
-        prompt_parts.append("Assistant:")
-        return "\n\n".join(prompt_parts)
+        prompt += "ASSISTANT: "
+        return prompt

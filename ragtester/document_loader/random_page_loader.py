@@ -30,6 +30,8 @@ class RandomPageLoader(DocumentLoader):
         self.max_words_per_page = max_words_per_page
         self.used_selections: Set[Tuple[str, int]] = set()  # (document_id, page_number)
         self.available_selections: List[Tuple[str, int]] = []  # All possible (doc_id, page_num) pairs
+        self.cached_pages: List[Tuple[str, int, str]] = []  # Cache for loaded pages (doc_id, page_num, page_text)
+        self.document_paths_cache: List[str] = []  # Cache for document paths
         if seed is not None:
             random.seed(seed)
     
@@ -44,16 +46,22 @@ class RandomPageLoader(DocumentLoader):
         try:
             with open(path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
-                for page in reader.pages:
+                # PDF loaded successfully
+                for i, page in enumerate(reader.pages):
                     try:
                         text = page.extract_text() or ""
-                        pages.append(text)
-                    except Exception:
+                        if text.strip():  # Only add non-empty pages
+                            pages.append(text)
+                        else:
+                            pages.append("")  # Empty page if no text
+                    except Exception as e:
+                        print(f"  Page {i+1}: extraction failed - {e}")
                         pages.append("")  # Empty page if extraction fails
         except Exception as e:
             print(f"Error reading PDF {path}: {e}")
             return []
         
+        # Pages extracted successfully
         return pages
     
     def _count_words(self, text: str) -> int:
@@ -115,9 +123,8 @@ class RandomPageLoader(DocumentLoader):
                         text = f.read()
                     if text.strip():
                         all_pages.append((doc_id, 0, text))
-                except Exception:
+                except Exception as e:
                     continue
-        
         return all_pages
     
     def load(self, paths: Iterable[str]) -> List[Document]:
@@ -128,6 +135,10 @@ class RandomPageLoader(DocumentLoader):
         # Load all available pages
         self.available_selections = []
         all_pages = self._load_document_pages(paths)
+        
+        if not all_pages:
+            print(f"Warning: No pages loaded from documents: {list(paths)}")
+            return []
         
         for doc_id, page_num, _ in all_pages:
             self.available_selections.append((doc_id, page_num))
@@ -140,9 +151,15 @@ class RandomPageLoader(DocumentLoader):
         Select a random page that hasn't been used before.
         Returns a PageSelection object with the selected page content.
         """
-        # Load pages if not already loaded
-        if not self.available_selections:
+        paths_list = list(paths)
+        
+        # Check if we need to reload (paths changed or no cache)
+        if paths_list != self.document_paths_cache or not self.cached_pages:
+            print(f"Loading pages from {len(paths_list)} documents...")
             self.load(paths)
+            # Cache the pages to avoid reloading
+            self.cached_pages = self._load_document_pages(paths)
+            self.document_paths_cache = paths_list.copy()
         
         # Find available (unused) selections
         available = [(doc_id, page_num) for doc_id, page_num in self.available_selections 
@@ -154,17 +171,20 @@ class RandomPageLoader(DocumentLoader):
             self.used_selections.clear()
             available = self.available_selections.copy()
         
+        # Check if we still have no available pages after reset
+        if not available:
+            print("Warning: Error selecting random page: Cannot choose from an empty sequence")
+            raise ValueError("No pages available for selection")
+        
         # Randomly select from available pages
         selected_doc_id, selected_page_num = random.choice(available)
         
         # Mark as used
         self.used_selections.add((selected_doc_id, selected_page_num))
         
-        # Find the corresponding page text
-        all_pages = self._load_document_pages(paths)
+        # Find the corresponding page text from cache
         selected_text = ""
-        
-        for doc_id, page_num, page_text in all_pages:
+        for doc_id, page_num, page_text in self.cached_pages:
             if doc_id == selected_doc_id and page_num == selected_page_num:
                 selected_text = page_text
                 break

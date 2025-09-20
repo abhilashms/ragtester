@@ -45,6 +45,14 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 | **OpenAI** | GPT-4, GPT-3.5, GPT-4o | High-quality evaluation |
 | **Anthropic** | Claude 3.5, Claude 3.7 | Balanced performance |
 | **AWS Bedrock** | Claude, Titan, Cohere | Enterprise deployment |
+| **Grok (xAI)** | Grok-1, Grok-2 | Latest AI capabilities |
+| **Google Gemini** | Gemini 1.5 Pro, Gemini 2.0 Flash | Multimodal evaluation |
+| **Mistral AI** | Mistral Large, Medium, Small | Open-source excellence |
+| **Cohere** | Command, Command Light | Enterprise RAG focus |
+| **Hugging Face** | 1000+ open models | Cost-effective options |
+| **Fireworks AI** | Fast Llama, Mistral inference | Serverless performance |
+| **Together AI** | Llama, Mistral, CodeLlama | Competitive pricing |
+| **Perplexity** | Real-time search models | Fact-checking capabilities |
 | **Local** | GGUF models (Llama, Vicuna) | Privacy, cost control |
 | **Dummy** | Mock responses | Testing without costs |
 
@@ -70,6 +78,14 @@ pip install ragtester
 pip install ragtester[openai]        # OpenAI API support
 pip install ragtester[anthropic]     # Anthropic API support
 pip install ragtester[bedrock]       # AWS Bedrock support
+pip install ragtester[grok]          # Grok (xAI) API support
+pip install ragtester[gemini]        # Google Gemini API support
+pip install ragtester[mistral]       # Mistral AI API support
+pip install ragtester[cohere]        # Cohere API support
+pip install ragtester[huggingface]   # Hugging Face Inference API support
+pip install ragtester[fireworks]     # Fireworks AI API support
+pip install ragtester[together]      # Together AI API support
+pip install ragtester[perplexity]    # Perplexity AI API support
 pip install ragtester[local-transformers]  # Local transformers models
 pip install ragtester[local-llama]   # Local llama.cpp models
 
@@ -108,7 +124,7 @@ def my_rag_function(question: str) -> str:
 # Configure the evaluation
 config = RAGTestConfig(
     llm=LLMConfig(
-        provider="openai",  # or "anthropic", "bedrock", "local"
+        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity", "bedrock", "local"
         model="gpt-4o-mini",
         api_key="your-api-key",
         temperature=0.7,
@@ -192,6 +208,110 @@ config = RAGTestConfig(
         temperature=0.7,
         max_tokens=2048,
         extra={"region": "us-east-1"}
+    )
+)
+```
+
+#### Grok (xAI)
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="grok",
+        model="grok-beta",  # or "grok-2"
+        api_key="your-xai-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Google Gemini
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="gemini",
+        model="gemini-1.5-flash",  # or "gemini-1.5-pro", "gemini-2.0-flash-exp"
+        api_key="your-google-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Mistral AI
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="mistral",
+        model="mistral-large-latest",  # or "mistral-medium-latest", "mistral-small-latest"
+        api_key="your-mistral-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Cohere
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="cohere",
+        model="command",  # or "command-light", "command-nightly"
+        api_key="your-cohere-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Hugging Face
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="huggingface",
+        model="microsoft/DialoGPT-medium",  # or any HF model
+        api_key="your-hf-token",
+        temperature=0.7,
+        max_tokens=512,
+    )
+)
+```
+
+#### Fireworks AI
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="fireworks",
+        model="accounts/fireworks/models/llama-v2-7b-chat",
+        api_key="your-fireworks-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Together AI
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="together",
+        model="meta-llama/Llama-2-7b-chat-hf",
+        api_key="your-together-api-key",
+        temperature=0.7,
+        max_tokens=2048,
+    )
+)
+```
+
+#### Perplexity AI
+```python
+config = RAGTestConfig(
+    llm=LLMConfig(
+        provider="perplexity",
+        model="llama-3.1-sonar-small-128k-online",  # with real-time search
+        api_key="your-perplexity-api-key",
+        temperature=0.2,  # Lower for factual accuracy
+        max_tokens=1024,
     )
 )
 ```
@@ -364,6 +484,176 @@ for name, result in results.items():
 
 ## 🌐 Provider Setup
 
+### Anthropic Claude Setup
+
+1. **Install Dependencies**
+   ```bash
+   pip install anthropic
+   ```
+
+2. **Get API Key**
+   - Visit [Anthropic Console](https://console.anthropic.com/)
+   - Create an account and get your API key
+
+3. **Configure Environment**
+   ```bash
+   export ANTHROPIC_API_KEY=your_api_key_here
+   ```
+
+4. **Available Models**
+   - `claude-3-5-sonnet-20241022` (Recommended)
+   - `claude-3-5-haiku-20241022` (Fast & Cost-effective)
+   - `claude-3-5-opus-20241022` (High quality)
+
+### Grok (xAI) Setup
+
+1. **Install Dependencies**
+   ```bash
+   pip install requests
+   ```
+
+2. **Get API Key**
+   - Visit [xAI Console](https://console.x.ai/)
+   - Sign up and get your API key
+
+3. **Configure Environment**
+   ```bash
+   export XAI_API_KEY=your_api_key_here
+   ```
+
+4. **Available Models**
+   - `grok-beta` (Current stable model)
+   - `grok-2` (Latest model)
+   - `grok-2-1212` (Latest experimental)
+
+### Google Gemini Setup
+
+1. **Install Dependencies**
+   ```bash
+   pip install google-generativeai
+   ```
+
+2. **Get API Key**
+   - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Create an API key
+
+3. **Configure Environment**
+   ```bash
+   export GOOGLE_API_KEY=your_api_key_here
+   ```
+
+4. **Available Models**
+   - `gemini-1.5-flash` (Fast & Cost-effective)
+   - `gemini-1.5-pro` (High quality)
+   - `gemini-2.0-flash-exp` (Latest experimental)
+
+### Mistral AI Setup
+
+1. **Install Dependencies**
+   ```bash
+   pip install mistralai
+   ```
+
+2. **Get API Key**
+   - Visit [Mistral AI Console](https://console.mistral.ai/)
+   - Create an account and get your API key
+
+3. **Configure Environment**
+   ```bash
+   export MISTRAL_API_KEY=your_api_key_here
+   ```
+
+4. **Available Models**
+   - `mistral-large-latest` (Recommended)
+   - `mistral-medium-latest` (Balanced)
+   - `mistral-small-latest` (Fast & Cost-effective)
+
+### Cohere Setup
+
+1. **Install Dependencies**
+   ```bash
+   pip install cohere
+   ```
+
+2. **Get API Key**
+   - Visit [Cohere Console](https://dashboard.cohere.ai/)
+   - Create an account and get your API key
+
+3. **Configure Environment**
+   ```bash
+   export COHERE_API_KEY=your_api_key_here
+   ```
+
+4. **Available Models**
+   - `command` (Recommended)
+   - `command-light` (Fast & Cost-effective)
+   - `command-nightly` (Latest features)
+
+### Hugging Face Setup
+
+1. **Get API Key**
+   - Visit [Hugging Face Settings](https://huggingface.co/settings/tokens)
+   - Create a token
+
+2. **Configure Environment**
+   ```bash
+   export HF_TOKEN=your_token_here
+   ```
+
+3. **Available Models**
+   - `microsoft/DialoGPT-medium` (Chat)
+   - `meta-llama/Llama-2-7b-chat-hf` (Llama)
+   - `mistralai/Mistral-7B-Instruct-v0.1` (Mistral)
+   - 1000+ other models available
+
+### Fireworks AI Setup
+
+1. **Get API Key**
+   - Visit [Fireworks AI Console](https://fireworks.ai/)
+   - Create an account and get your API key
+
+2. **Configure Environment**
+   ```bash
+   export FIREWORKS_API_KEY=your_api_key_here
+   ```
+
+3. **Available Models**
+   - `accounts/fireworks/models/llama-v2-7b-chat` (Fast Llama)
+   - `accounts/fireworks/models/mixtral-8x7b-instruct` (Mixtral)
+   - `accounts/fireworks/models/codellama-7b-instruct` (Code)
+
+### Together AI Setup
+
+1. **Get API Key**
+   - Visit [Together AI Console](https://api.together.xyz/)
+   - Create an account and get your API key
+
+2. **Configure Environment**
+   ```bash
+   export TOGETHER_API_KEY=your_api_key_here
+   ```
+
+3. **Available Models**
+   - `meta-llama/Llama-2-7b-chat-hf` (Llama 2)
+   - `mistralai/Mistral-7B-Instruct-v0.1` (Mistral)
+   - `codellama/CodeLlama-7b-Instruct-hf` (CodeLlama)
+
+### Perplexity AI Setup
+
+1. **Get API Key**
+   - Visit [Perplexity AI Console](https://console.perplexity.ai/)
+   - Create an account and get your API key
+
+2. **Configure Environment**
+   ```bash
+   export PERPLEXITY_API_KEY=your_api_key_here
+   ```
+
+3. **Available Models**
+   - `llama-3.1-sonar-small-128k-online` (With search)
+   - `llama-3.1-sonar-medium-128k-online` (With search)
+   - `llama-3.1-sonar-large-128k-online` (With search)
+
 ### AWS Bedrock Setup
 
 1. **Install Dependencies**
@@ -478,18 +768,26 @@ python --version
 import os
 os.environ["OPENAI_API_KEY"] = "your-key"
 os.environ["ANTHROPIC_API_KEY"] = "your-key"
+os.environ["XAI_API_KEY"] = "your-key"
+os.environ["GOOGLE_API_KEY"] = "your-key"
+os.environ["MISTRAL_API_KEY"] = "your-key"
+os.environ["COHERE_API_KEY"] = "your-key"
+os.environ["HF_TOKEN"] = "your-key"
+os.environ["FIREWORKS_API_KEY"] = "your-key"
+os.environ["TOGETHER_API_KEY"] = "your-key"
+os.environ["PERPLEXITY_API_KEY"] = "your-key"
 
 # Or pass directly
 config = RAGTestConfig(
     llm=LLMConfig(
-        provider="openai",
+        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity"
         api_key="your-key"
     )
 )
 ```
 
 #### Slow Performance
-- Use faster models (GPT-4o-mini, Claude Haiku)
+- Use faster models (GPT-4o-mini, Claude Haiku, Gemini Flash, Grok Beta, Mistral Small, Cohere Light)
 - Reduce question counts in GenerationPlan
 - Use local models for privacy-sensitive applications
 - Consider batch processing for multiple evaluations

@@ -42,10 +42,10 @@ def to_console(results: TestResults) -> str:
 def export_csv(results: TestResults, path: str) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["category", "question", "score", "verdict", "reasoning"])
+        writer.writerow(["category", "question", "rag_answer", "score", "reasoning"])
         for cat, sc in results.scorecards.items():
             for e in sc.evaluations:
-                writer.writerow([cat.value, e.question.text, e.score, e.verdict, e.reasoning])
+                writer.writerow([cat.value, e.question.text, e.answer, e.score, e.reasoning])
 
 
 def export_markdown(results: TestResults, path: str) -> None:

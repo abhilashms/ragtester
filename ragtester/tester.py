@@ -61,11 +61,18 @@ class RAGTester:
         responses = self._ask_all(questions)
         evaluations = self.judge.evaluate(responses)
 
-        # Aggregate by category
+        # Aggregate by category while preserving the order of questions within each category
         by_cat: Dict[TestCategory, List[Evaluation]] = defaultdict(list)
         for ev in evaluations:
             by_cat[ev.question.category].append(ev)
-        scorecards = {cat: CategoryScorecard(category=cat, evaluations=evs) for cat, evs in by_cat.items()}
+        
+        # Create scorecards in the same order as the categories appear in the config
+        # This ensures that questions from the same category appear consecutively
+        scorecards = {}
+        for category in self.config.generation.per_category.keys():
+            if category in by_cat:
+                scorecards[category] = CategoryScorecard(category=category, evaluations=by_cat[category])
+        
         return TestResults(scorecards=scorecards)
 
     def export_results(self, results: TestResults, path: str) -> None:

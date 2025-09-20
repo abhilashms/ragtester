@@ -21,19 +21,39 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
     try:
         if name == "openai":
             from .providers_openai import OpenAIChat
-
             return OpenAIChat(**kwargs)
         if name == "anthropic":
             from .providers_anthropic import AnthropicChat
-
             return AnthropicChat(**kwargs)
+        if name == "grok":
+            from .providers_grok import GrokChat
+            return GrokChat(**kwargs)
+        if name == "gemini":
+            from .providers_gemini import GeminiChat
+            return GeminiChat(**kwargs)
+        if name == "mistral":
+            from .providers_mistral import MistralChat
+            return MistralChat(**kwargs)
+        if name == "cohere":
+            from .providers_cohere import CohereChat
+            return CohereChat(**kwargs)
+        if name == "huggingface":
+            from .providers_huggingface import HuggingFaceChat
+            return HuggingFaceChat(**kwargs)
+        if name == "fireworks":
+            from .providers_fireworks import FireworksChat
+            return FireworksChat(**kwargs)
+        if name == "together":
+            from .providers_together import TogetherChat
+            return TogetherChat(**kwargs)
+        if name == "perplexity":
+            from .providers_perplexity import PerplexityChat
+            return PerplexityChat(**kwargs)
         if name == "local":
             from .providers_local import LocalLLM
-
             return LocalLLM(**kwargs)
         if name == "bedrock":
             from .providers_bedrock import BedrockLLM
-
             return BedrockLLM(**kwargs)
     except Exception:
         # Fallback to dummy if provider not installed or fails to init

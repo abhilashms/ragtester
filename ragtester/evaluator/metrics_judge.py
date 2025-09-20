@@ -419,6 +419,76 @@ justification: [your reasoning]
             parts.append(s)
         return "\n".join(parts)
     
+    def _clean_justification_text(self, text: str, metric_name: str) -> str:
+        """Remove metric name prefix and score information from justification text."""
+        if not text:
+            return text
+            
+        cleaned_text = text.strip()
+        
+        # Remove common metric name prefixes (case insensitive)
+        prefixes_to_remove = [
+            f"{metric_name}:",
+            f"{metric_name} -",
+            f"{metric_name} –",
+            f"{metric_name} |",
+            f"{metric_name} - ",
+            f"{metric_name} – ",
+            f"{metric_name} | ",
+        ]
+        
+        # Try exact match first
+        for prefix in prefixes_to_remove:
+            if cleaned_text.startswith(prefix):
+                cleaned_text = cleaned_text[len(prefix):].strip()
+                break
+        
+        # If no exact match, try case-insensitive
+        if cleaned_text == text.strip():
+            for prefix in prefixes_to_remove:
+                if cleaned_text.lower().startswith(prefix.lower()):
+                    cleaned_text = cleaned_text[len(prefix):].strip()
+                    break
+        
+        # Remove score-related content from the reasoning
+        import re
+        
+        # Remove lines that start with score patterns
+        lines = cleaned_text.split('\n')
+        filtered_lines = []
+        for line in lines:
+            line = line.strip()
+            # Skip lines that contain score information
+            if (line.lower().startswith(('score:', '1. score:', '2. score:', '3. score:', '4. score:', '5. score:')) or
+                re.match(r'^\d+\.?\s*score:', line.lower()) or
+                re.match(r'^\d+\.?\s*\d+/5', line) or
+                re.match(r'^\d+\.?\s*\d+', line) and 'score' in line.lower()):
+                continue
+            filtered_lines.append(line)
+        
+        cleaned_text = '\n'.join(filtered_lines).strip()
+        
+        # Remove standalone score patterns from the text
+        cleaned_text = re.sub(r'\d+\.?\s*score:\s*\d+', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r'\d+\.?\s*\d+/5', '', cleaned_text)
+        cleaned_text = re.sub(r'^\d+\.?\s*', '', cleaned_text, flags=re.MULTILINE)  # Remove numbered list prefixes
+        
+        # Remove "justification:" prefix if present
+        if cleaned_text.lower().startswith('justification:'):
+            cleaned_text = cleaned_text[13:].strip()  # Remove "justification:" (13 characters)
+        
+        # Remove leading colons and spaces
+        cleaned_text = re.sub(r'^:\s*', '', cleaned_text)
+        
+        # Remove sub-metric scores like "Fluency: 4"
+        cleaned_text = re.sub(r'^(Fluency|Clarity|Conciseness|Justification):\s*\d+\.?\d*\s*\n?', '', cleaned_text, flags=re.MULTILINE)
+        
+        # Remove standalone numbers (scores without context)
+        if re.match(r'^\d+\.?\d*$', cleaned_text.strip()):
+            cleaned_text = "No justification provided"
+        
+        return cleaned_text.strip()
+    
     def _evaluate_single_metric(self, response: RAGResponse, metric: EvaluationMetric) -> MetricEvaluation:
         """Evaluate a single metric for one response."""
         try:
@@ -436,27 +506,27 @@ justification: [your reasoning]
                 # Include context for metrics that need it
                 user_prompt = f"""EVALUATION DATA:
 
-QUESTION:
-{response.question.text}
+            QUESTION:
+            {response.question.text}
 
-SYSTEM RESPONSE:
-{response.answer or ""}
+            SYSTEM RESPONSE:
+            {response.answer or ""}
 
-SOURCE DOCUMENTS:
-{self._get_context_for_evaluation(response)}
+            SOURCE DOCUMENTS:
+            {self._get_context_for_evaluation(response)}
 
-Please evaluate the system response according to the metric definition and rubric provided in the system prompt."""
+            Please evaluate the system response according to the metric definition and rubric provided in the system prompt."""
             else:
                 # Don't include context for toxicity and security metrics
                 user_prompt = f"""EVALUATION DATA:
 
-QUESTION:
-{response.question.text}
+                QUESTION:
+                {response.question.text}
 
-SYSTEM RESPONSE:
-{response.answer or ""}
+                SYSTEM RESPONSE:
+                {response.answer or ""}
 
-Please evaluate the system response according to the metric definition and rubric provided in the system prompt."""
+                Please evaluate the system response according to the metric definition and rubric provided in the system prompt."""
                                 
             messages: List[LLMMessage] = [
                 {"role": "system", "content": system_prompt},
@@ -467,10 +537,13 @@ Please evaluate the system response according to the metric definition and rubri
             
             # Parse the response - expect format: "score: X\njustification: Y"
             score = 3.0  # Default middle score
-            justification = raw
+            justification = raw.strip() if raw.strip() else ""
             
             try:
                 lines = raw.strip().split('\n')
+                score_found = False
+                justification_found = False
+                
                 for line in lines:
                     line = line.strip()
                     if line.lower().startswith('score:'):
@@ -478,8 +551,25 @@ Please evaluate the system response according to the metric definition and rubri
                         # Handle various score formats (e.g., "3", "3.0", "3/5", "3 out of 5")
                         score_str = score_str.split('/')[0].split(' ')[0]  # Remove "/5" or "out of 5"
                         score = float(score_str)
+                        score_found = True
                     elif line.lower().startswith('justification:'):
                         justification = line.split(':', 1)[1].strip()
+                        justification_found = True
+                
+                # If we didn't find explicit score/justification, try to extract from raw response
+                if not score_found or not justification_found:
+                    # Try to find a number between 1-5 in the response
+                    import re
+                    score_matches = re.findall(r'\b([1-5])\b', raw)
+                    if score_matches:
+                        score = float(score_matches[0])
+                        score_found = True
+                    
+                    # If no explicit justification found, use the raw response as justification
+                    if not justification_found and raw.strip():
+                        justification = raw.strip()
+                        justification_found = True
+                        
             except (ValueError, IndexError) as e:
                 # Log parsing error for debugging
                 print(f"Warning: Error parsing score for {metric.value}: {e}. Raw response: {raw[:200]}...")
@@ -497,10 +587,13 @@ Please evaluate the system response according to the metric definition and rubri
             if not justification or justification.strip() == "":
                 justification = f"No justification provided for {metric.value} score of {final_score}"
             
+            # Clean up justification by removing metric name prefix if present
+            cleaned_justification = self._clean_justification_text(justification, metric.value)
+            
             return MetricEvaluation(
                 metric=metric,
                 score=final_score,
-                justification=justification.strip()
+                justification=cleaned_justification.strip()
             )
         except Exception as e:
             print(f"Error evaluating {metric.value}: {e}")
@@ -513,64 +606,54 @@ Please evaluate the system response according to the metric definition and rubri
     
     def evaluate(self, responses: List[RAGResponse]) -> List[Evaluation]:
         """
-        Evaluates all 5 metrics for each response for comprehensive evaluation.
-        This method provides complete assessment across all evaluation dimensions.
+        Evaluates each response only on the specific metric it was designed for.
+        Questions are generated for specific metrics, so we only evaluate on that metric.
         """
         evaluations: List[Evaluation] = []
         
         for response in responses:
             metric_evaluations: List[MetricEvaluation] = []
             
-            # Evaluate all 5 metrics
-            for metric in EvaluationMetric:
-                metric_eval = self._evaluate_single_metric(response, metric)
-                metric_evaluations.append(metric_eval)
+            # Get the specific metric this question was designed for
+            question_category = response.question.category
+            target_metric = EvaluationMetric(question_category.value)
             
-            # Calculate overall score as average of all metrics (rounded to integer)
-            if metric_evaluations:
-                total_score = sum(me.score for me in metric_evaluations)
-                overall_score = int(round(total_score / len(metric_evaluations)))
-                # Ensure overall score is within valid range
-                overall_score = max(1, min(5, overall_score))
-            else:
-                overall_score = 3  # Default score if no evaluations
+            # Evaluate only the specific metric this question was designed for
+            metric_eval = self._evaluate_single_metric(response, target_metric)
+            metric_evaluations.append(metric_eval)
             
-            # Create summary verdict
-            verdict_parts = []
-            for me in metric_evaluations:
-                verdict_parts.append(f"{me.metric.value}: {me.score}/5")
-            verdict = " | ".join(verdict_parts)
+            # The overall score is just the score for the specific metric
+            overall_score = metric_eval.score
             
-            # Create detailed reasoning from metric evaluations
-            reasoning_parts = []
-            for me in metric_evaluations:
-                # Clean up the justification to remove any metric prefixes
-                clean_justification = me.justification
-                
-                # Remove common metric prefixes (case-insensitive)
-                metric_prefixes = [
-                    "Faithfulness:", "Answer Quality:", "Toxicity:", 
-                    "Robustness & Reliability:", "Security & Safety:",
-                    "faithfulness:", "answer quality:", "toxicity:",
-                    "robustness & reliability:", "security & safety:"
-                ]
-                
-                for prefix in metric_prefixes:
-                    if clean_justification.startswith(prefix):
-                        clean_justification = clean_justification[len(prefix):].strip()
-                        break
-                
-                # Use proper metric display names
-                metric_display_name = {
-                    EvaluationMetric.FAITHFULNESS: "Faithfulness",
-                    EvaluationMetric.ANSWER_QUALITY: "Answer Quality", 
-                    EvaluationMetric.TOXICITY: "Toxicity",
-                    EvaluationMetric.ROBUSTNESS_RELIABILITY: "Robustness & Reliability",
-                    EvaluationMetric.SECURITY_SAFETY: "Security & Safety"
-                }[me.metric]
-                
-                reasoning_parts.append(f"{metric_display_name}: {clean_justification}")
-            reasoning = " | ".join(reasoning_parts)
+            # Create summary verdict for the specific metric
+            verdict = f"{target_metric.value}: {metric_eval.score}/5"
+            
+            # Create detailed reasoning for the specific metric
+            clean_justification = metric_eval.justification
+            
+            # Remove common metric prefixes (case-insensitive)
+            metric_prefixes = [
+                "Faithfulness:", "Answer Quality:", "Toxicity:", 
+                "Robustness & Reliability:", "Security & Safety:",
+                "faithfulness:", "answer quality:", "toxicity:",
+                "robustness & reliability:", "security & safety:"
+            ]
+            
+            for prefix in metric_prefixes:
+                if clean_justification.startswith(prefix):
+                    clean_justification = clean_justification[len(prefix):].strip()
+                    break
+            
+            # Use proper metric display name
+            metric_display_name = {
+                EvaluationMetric.FAITHFULNESS: "Faithfulness",
+                EvaluationMetric.ANSWER_QUALITY: "Answer Quality", 
+                EvaluationMetric.TOXICITY: "Toxicity",
+                EvaluationMetric.ROBUSTNESS_RELIABILITY: "Robustness & Reliability",
+                EvaluationMetric.SECURITY_SAFETY: "Security & Safety"
+            }[target_metric]
+            
+            reasoning = clean_justification
             
             # Create evaluation
             evaluation = Evaluation(
