@@ -105,7 +105,12 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
             logger.debug("Importing Bedrock provider...")
             from .providers_bedrock import BedrockLLM
             logger.info(f"Initializing Bedrock with model: {model_name}, region: {kwargs.get('region', 'us-east-1')}")
-            provider = BedrockLLM(**kwargs)
+            
+            # Filter kwargs for Bedrock - remove api_key and base_url as Bedrock doesn't use them
+            bedrock_kwargs = {k: v for k, v in kwargs.items() if k not in ['api_key', 'base_url']}
+            logger.debug(f"Filtered Bedrock kwargs: {bedrock_kwargs}")
+            
+            provider = BedrockLLM(**bedrock_kwargs)
             logger.info("✅ Bedrock provider initialized successfully")
         else:
             logger.error(f"❌ Unknown provider: {name}")
