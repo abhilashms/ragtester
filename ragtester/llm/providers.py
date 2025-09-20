@@ -9,69 +9,134 @@ from .logging_wrapper import LoggingLLMWrapper
 
 
 class DummyLLM(LLMProvider):
+    def __init__(self):
+        # Import logging utilities
+        from ..logging_utils import get_logger
+        self.logger = get_logger()
+        self.logger.warning("⚠️ DummyLLM initialized - this is a fallback provider for testing")
+    
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         # Very naive echo-style model for offline testing
+        self.logger.warning("⚠️ DummyLLM.chat() called - returning dummy response")
+        self.logger.debug(f"DummyLLM received {len(messages)} messages")
+        
         last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        return f"[DUMMY ANSWER] {last_user[:400]}"
+        dummy_response = f"[DUMMY ANSWER] {last_user[:400]}"
+        
+        self.logger.warning(f"⚠️ DummyLLM returning: {dummy_response[:100]}...")
+        return dummy_response
 
 
 def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
     name = (provider_name or "").lower()
     model_name = kwargs.get('model', 'unknown')
     
+    # Import logging utilities
+    from ..logging_utils import get_logger
+    logger = get_logger()
+    
+    logger.info(f"🔧 Building LLM - Provider: {name}, Model: {model_name}")
+    logger.debug(f"LLM kwargs: {kwargs}")
+    
     if name in ("", "dummy"):
+        logger.info("Using dummy provider (explicitly requested)")
         provider = DummyLLM()
         return LoggingLLMWrapper(provider, "dummy", model_name)
     
+    logger.info(f"Attempting to initialize {name} provider...")
+    
     try:
         if name == "openai":
+            logger.debug("Importing OpenAI provider...")
             from .providers_openai import OpenAIChat
             provider = OpenAIChat(**kwargs)
+            logger.info("✅ OpenAI provider initialized successfully")
         elif name == "anthropic":
+            logger.debug("Importing Anthropic provider...")
             from .providers_anthropic import AnthropicChat
             provider = AnthropicChat(**kwargs)
+            logger.info("✅ Anthropic provider initialized successfully")
         elif name == "grok":
+            logger.debug("Importing Grok provider...")
             from .providers_grok import GrokChat
             provider = GrokChat(**kwargs)
+            logger.info("✅ Grok provider initialized successfully")
         elif name == "gemini":
+            logger.debug("Importing Gemini provider...")
             from .providers_gemini import GeminiChat
             provider = GeminiChat(**kwargs)
+            logger.info("✅ Gemini provider initialized successfully")
         elif name == "mistral":
+            logger.debug("Importing Mistral provider...")
             from .providers_mistral import MistralChat
             provider = MistralChat(**kwargs)
+            logger.info("✅ Mistral provider initialized successfully")
         elif name == "cohere":
+            logger.debug("Importing Cohere provider...")
             from .providers_cohere import CohereChat
             provider = CohereChat(**kwargs)
+            logger.info("✅ Cohere provider initialized successfully")
         elif name == "huggingface":
+            logger.debug("Importing HuggingFace provider...")
             from .providers_huggingface import HuggingFaceChat
             provider = HuggingFaceChat(**kwargs)
+            logger.info("✅ HuggingFace provider initialized successfully")
         elif name == "fireworks":
+            logger.debug("Importing Fireworks provider...")
             from .providers_fireworks import FireworksChat
             provider = FireworksChat(**kwargs)
+            logger.info("✅ Fireworks provider initialized successfully")
         elif name == "together":
+            logger.debug("Importing Together provider...")
             from .providers_together import TogetherChat
             provider = TogetherChat(**kwargs)
+            logger.info("✅ Together provider initialized successfully")
         elif name == "perplexity":
+            logger.debug("Importing Perplexity provider...")
             from .providers_perplexity import PerplexityChat
             provider = PerplexityChat(**kwargs)
+            logger.info("✅ Perplexity provider initialized successfully")
         elif name == "local":
+            logger.debug("Importing Local provider...")
             from .providers_local import LocalLLM
             provider = LocalLLM(**kwargs)
+            logger.info("✅ Local provider initialized successfully")
         elif name == "bedrock":
+            logger.debug("Importing Bedrock provider...")
             from .providers_bedrock import BedrockLLM
+            logger.info(f"Initializing Bedrock with model: {model_name}, region: {kwargs.get('region', 'us-east-1')}")
             provider = BedrockLLM(**kwargs)
+            logger.info("✅ Bedrock provider initialized successfully")
         else:
+            logger.error(f"❌ Unknown provider: {name}")
             raise ValueError(f"Unknown provider: {name}")
         
+        logger.info(f"✅ {name} provider created successfully, wrapping with logging...")
         # Wrap with logging
-        return LoggingLLMWrapper(provider, name, model_name)
+        wrapped_provider = LoggingLLMWrapper(provider, name, model_name)
+        logger.info(f"✅ LLM build completed successfully for {name}")
+        return wrapped_provider
         
+    except ImportError as e:
+        logger.error(f"❌ Import error for {name} provider: {e}")
+        logger.error(f"Missing dependency for {name}. Please install required packages.")
+        logger.warning(f"Falling back to dummy provider due to import error.")
+        
+        provider = DummyLLM()
+        return LoggingLLMWrapper(provider, "dummy", model_name)
     except Exception as e:
-        # Log the error and fallback to dummy if provider not installed or fails to init
-        import logging
-        logger = logging.getLogger("ragtester")
-        logger.error(f"Failed to initialize {name} provider: {e}")
+        logger.error(f"❌ Failed to initialize {name} provider: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error details: {str(e)}")
         logger.warning(f"Falling back to dummy provider. Check your configuration and dependencies.")
+        
+        # Log additional debugging info
+        if name == "bedrock":
+            logger.error("🔍 Bedrock-specific debugging info:")
+            logger.error(f"  - Model: {model_name}")
+            logger.error(f"  - Region: {kwargs.get('region', 'us-east-1')}")
+            logger.error(f"  - All kwargs: {kwargs}")
+            logger.error("  - Check: AWS credentials, boto3 installation, IAM permissions")
         
         provider = DummyLLM()
         return LoggingLLMWrapper(provider, "dummy", model_name)
