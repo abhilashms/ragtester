@@ -49,64 +49,95 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
         if name == "openai":
             logger.debug("Importing OpenAI provider...")
             from .providers_openai import OpenAIChat
+            # OpenAI expects: model, api_key, base_url, and other kwargs
             provider = OpenAIChat(**kwargs)
             logger.info("✅ OpenAI provider initialized successfully")
         elif name == "anthropic":
             logger.debug("Importing Anthropic provider...")
             from .providers_anthropic import AnthropicChat
-            provider = AnthropicChat(**kwargs)
+            # Anthropic expects: model, api_key, and other kwargs (no base_url)
+            anthropic_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Anthropic kwargs: {anthropic_kwargs}")
+            provider = AnthropicChat(**anthropic_kwargs)
             logger.info("✅ Anthropic provider initialized successfully")
         elif name == "grok":
             logger.debug("Importing Grok provider...")
             from .providers_grok import GrokChat
-            provider = GrokChat(**kwargs)
+            # Grok expects: model, api_key, and other kwargs (no base_url)
+            grok_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Grok kwargs: {grok_kwargs}")
+            provider = GrokChat(**grok_kwargs)
             logger.info("✅ Grok provider initialized successfully")
         elif name == "gemini":
             logger.debug("Importing Gemini provider...")
             from .providers_gemini import GeminiChat
-            provider = GeminiChat(**kwargs)
+            # Gemini expects: model, api_key, and other kwargs (no base_url)
+            gemini_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Gemini kwargs: {gemini_kwargs}")
+            provider = GeminiChat(**gemini_kwargs)
             logger.info("✅ Gemini provider initialized successfully")
         elif name == "mistral":
             logger.debug("Importing Mistral provider...")
             from .providers_mistral import MistralChat
-            provider = MistralChat(**kwargs)
+            # Mistral expects: model, api_key, and other kwargs (no base_url)
+            mistral_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Mistral kwargs: {mistral_kwargs}")
+            provider = MistralChat(**mistral_kwargs)
             logger.info("✅ Mistral provider initialized successfully")
         elif name == "cohere":
             logger.debug("Importing Cohere provider...")
             from .providers_cohere import CohereChat
-            provider = CohereChat(**kwargs)
+            # Cohere expects: model, api_key, and other kwargs (no base_url)
+            cohere_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Cohere kwargs: {cohere_kwargs}")
+            provider = CohereChat(**cohere_kwargs)
             logger.info("✅ Cohere provider initialized successfully")
         elif name == "huggingface":
             logger.debug("Importing HuggingFace provider...")
             from .providers_huggingface import HuggingFaceChat
-            provider = HuggingFaceChat(**kwargs)
+            # HuggingFace expects: model, api_key, and other kwargs (no base_url)
+            hf_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered HuggingFace kwargs: {hf_kwargs}")
+            provider = HuggingFaceChat(**hf_kwargs)
             logger.info("✅ HuggingFace provider initialized successfully")
         elif name == "fireworks":
             logger.debug("Importing Fireworks provider...")
             from .providers_fireworks import FireworksChat
-            provider = FireworksChat(**kwargs)
+            # Fireworks expects: model, api_key, and other kwargs (no base_url)
+            fireworks_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Fireworks kwargs: {fireworks_kwargs}")
+            provider = FireworksChat(**fireworks_kwargs)
             logger.info("✅ Fireworks provider initialized successfully")
         elif name == "together":
             logger.debug("Importing Together provider...")
             from .providers_together import TogetherChat
-            provider = TogetherChat(**kwargs)
+            # Together expects: model, api_key, and other kwargs (no base_url)
+            together_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Together kwargs: {together_kwargs}")
+            provider = TogetherChat(**together_kwargs)
             logger.info("✅ Together provider initialized successfully")
         elif name == "perplexity":
             logger.debug("Importing Perplexity provider...")
             from .providers_perplexity import PerplexityChat
-            provider = PerplexityChat(**kwargs)
+            # Perplexity expects: model, api_key, and other kwargs (no base_url)
+            perplexity_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Perplexity kwargs: {perplexity_kwargs}")
+            provider = PerplexityChat(**perplexity_kwargs)
             logger.info("✅ Perplexity provider initialized successfully")
         elif name == "local":
             logger.debug("Importing Local provider...")
             from .providers_local import LocalLLM
-            provider = LocalLLM(**kwargs)
+            # Local expects: model and other kwargs (no api_key, base_url)
+            local_kwargs = {k: v for k, v in kwargs.items() if k not in ['api_key', 'base_url']}
+            logger.debug(f"Filtered Local kwargs: {local_kwargs}")
+            provider = LocalLLM(**local_kwargs)
             logger.info("✅ Local provider initialized successfully")
         elif name == "bedrock":
             logger.debug("Importing Bedrock provider...")
             from .providers_bedrock import BedrockLLM
             logger.info(f"Initializing Bedrock with model: {model_name}, region: {kwargs.get('region', 'us-east-1')}")
             
-            # Filter kwargs for Bedrock - remove api_key and base_url as Bedrock doesn't use them
+            # Bedrock expects: model, region, and other kwargs (no api_key, base_url)
             bedrock_kwargs = {k: v for k, v in kwargs.items() if k not in ['api_key', 'base_url']}
             logger.debug(f"Filtered Bedrock kwargs: {bedrock_kwargs}")
             
