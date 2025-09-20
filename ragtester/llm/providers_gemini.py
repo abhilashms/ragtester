@@ -24,7 +24,17 @@ class GeminiChat(LLMProvider):
         """
         self.model = model
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        self.kwargs = kwargs
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Store other parameters that might be used by the client
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p']}
         
         if not self.api_key:
             raise ValueError(
@@ -67,7 +77,7 @@ class GeminiChat(LLMProvider):
         
         # Initialize the model
         self._genai = genai
-        self._client = genai.GenerativeModel(self.model)
+        self._client = genai.GenerativeModel(self.model, **self.client_kwargs)
 
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """
@@ -83,8 +93,8 @@ class GeminiChat(LLMProvider):
         if not hasattr(self, '_client'):
             self._initialize_client()
         
-        # Merge kwargs
-        merged_kwargs = {**self.kwargs, **kwargs}
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
         
         # Convert messages to Gemini format
         # Gemini uses a different message format than OpenAI
@@ -105,10 +115,10 @@ class GeminiChat(LLMProvider):
         try:
             # Create generation config
             generation_config = self._genai.types.GenerationConfig(
-                max_output_tokens=merged_kwargs.get("max_tokens", 1024),
-                temperature=merged_kwargs.get("temperature", 0.7),
-                top_p=merged_kwargs.get("top_p", 0.95),
-                top_k=merged_kwargs.get("top_k", 40),
+                max_output_tokens=merged_chat_params.get("max_tokens", 1024),
+                temperature=merged_chat_params.get("temperature", 0.7),
+                top_p=merged_chat_params.get("top_p", 0.95),
+                top_k=merged_chat_params.get("top_k", 40),
             )
             
             # If we have conversation history, use chat mode

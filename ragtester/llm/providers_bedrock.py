@@ -28,13 +28,25 @@ class BedrockLLM(LLMProvider):
         
         self.model_id = model or "us.anthropic.claude-3-5-haiku-20241022-v1:0"
         self.region = region or "us-east-1"
-        self.kwargs = kwargs
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Only pass AWS-specific parameters to client initialization
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p', 'model', 'region']}
+        
         self._client = None
         
         self.logger.info(f"🚀 Initializing Bedrock LLM Provider")
         self.logger.info(f"  - Model: {self.model_id}")
         self.logger.info(f"  - Region: {self.region}")
-        self.logger.debug(f"  - Additional kwargs: {kwargs}")
+        self.logger.debug(f"  - Chat params: {self.chat_params}")
+        self.logger.debug(f"  - Client kwargs: {self.client_kwargs}")
         
         self._initialize_client()
     
@@ -50,10 +62,11 @@ class BedrockLLM(LLMProvider):
             
             # Initialize Bedrock client
             self.logger.info(f"Creating Bedrock runtime client for region: {self.region}")
+            self.logger.debug(f"Client kwargs: {self.client_kwargs}")
             self._client = boto3.client(
                 'bedrock-runtime',
                 region_name=self.region,
-                **self.kwargs
+                **self.client_kwargs
             )
             self.logger.info("✅ Bedrock runtime client created successfully")
             
@@ -134,14 +147,18 @@ class BedrockLLM(LLMProvider):
         formatted_messages = self._format_messages(messages)
         self.logger.debug(f"Formatted messages: {formatted_messages}")
         
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
+        self.logger.debug(f"Merged chat parameters: {merged_chat_params}")
+        
         # Determine the request body format based on model
         if "anthropic" in self.model_id.lower():
             self.logger.debug("Creating Anthropic request format...")
-            request_body = self._create_anthropic_request(formatted_messages, kwargs)
+            request_body = self._create_anthropic_request(formatted_messages, merged_chat_params)
         else:
             self.logger.debug("Creating generic request format...")
             # Generic format for other models
-            request_body = self._create_generic_request(formatted_messages, kwargs)
+            request_body = self._create_generic_request(formatted_messages, merged_chat_params)
         
         self.logger.debug(f"Request body: {request_body}")
         

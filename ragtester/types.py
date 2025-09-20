@@ -83,7 +83,7 @@ class CategoryScorecard:
 
 @dataclass
 class TestResults:
-    scorecards: Dict[TestCategory, CategoryScorecard]
+    scorecards: Dict[TestCategory, CategoryScorecard] = field(default_factory=dict)
 
     def overall_score(self) -> float:
         if not self.scorecards:

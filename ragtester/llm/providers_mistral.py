@@ -24,7 +24,17 @@ class MistralChat(LLMProvider):
         """
         self.model = model
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
-        self.kwargs = kwargs
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Store other parameters that might be used by the client
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p']}
         
         if not self.api_key:
             raise ValueError(
@@ -71,8 +81,8 @@ class MistralChat(LLMProvider):
                 "mistralai package is required. Install with: pip install mistralai"
             )
 
-        # Merge kwargs
-        merged_kwargs = {**self.kwargs, **kwargs}
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
         
         # Initialize client
         client = MistralClient(api_key=self.api_key)
@@ -90,9 +100,9 @@ class MistralChat(LLMProvider):
             response = client.chat(
                 model=self.model,
                 messages=mistral_messages,
-                temperature=merged_kwargs.get("temperature", 0.7),
-                max_tokens=merged_kwargs.get("max_tokens", 1024),
-                top_p=merged_kwargs.get("top_p", 1.0),
+                temperature=merged_chat_params.get("temperature", 0.7),
+                max_tokens=merged_chat_params.get("max_tokens", 1024),
+                top_p=merged_chat_params.get("top_p", 1.0),
                 stream=False
             )
             

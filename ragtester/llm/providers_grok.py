@@ -26,7 +26,17 @@ class GrokChat(LLMProvider):
         self.model = model
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.base_url = base_url or "https://api.x.ai/v1"
-        self.kwargs = kwargs
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Store other parameters that might be used by the client
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p']}
         
         if not self.api_key:
             raise ValueError(
@@ -66,8 +76,8 @@ class GrokChat(LLMProvider):
                 "requests package is required. Install with: pip install requests"
             )
 
-        # Merge kwargs
-        merged_kwargs = {**self.kwargs, **kwargs}
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
         
         # Convert messages to OpenAI-compatible format (Grok API follows OpenAI format)
         openai_messages = []
@@ -81,20 +91,20 @@ class GrokChat(LLMProvider):
         payload = {
             "model": self.model,
             "messages": openai_messages,
-            "max_tokens": merged_kwargs.get("max_tokens", 1024),
-            "temperature": merged_kwargs.get("temperature", 0.7),
+            "max_tokens": merged_chat_params.get("max_tokens", 1024),
+            "temperature": merged_chat_params.get("temperature", 0.7),
             "stream": False
         }
         
         # Add optional parameters
-        if "top_p" in merged_kwargs:
-            payload["top_p"] = merged_kwargs["top_p"]
-        if "frequency_penalty" in merged_kwargs:
-            payload["frequency_penalty"] = merged_kwargs["frequency_penalty"]
-        if "presence_penalty" in merged_kwargs:
-            payload["presence_penalty"] = merged_kwargs["presence_penalty"]
-        if "stop" in merged_kwargs:
-            payload["stop"] = merged_kwargs["stop"]
+        if "top_p" in merged_chat_params:
+            payload["top_p"] = merged_chat_params["top_p"]
+        if "frequency_penalty" in merged_chat_params:
+            payload["frequency_penalty"] = merged_chat_params["frequency_penalty"]
+        if "presence_penalty" in merged_chat_params:
+            payload["presence_penalty"] = merged_chat_params["presence_penalty"]
+        if "stop" in merged_chat_params:
+            payload["stop"] = merged_chat_params["stop"]
         
         # Prepare headers
         headers = {

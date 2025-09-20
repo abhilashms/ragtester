@@ -24,7 +24,17 @@ class TogetherChat(LLMProvider):
         """
         self.model = model
         self.api_key = api_key or os.getenv("TOGETHER_API_KEY")
-        self.kwargs = kwargs
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Store other parameters that might be used by the client
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p']}
         
         if not self.api_key:
             raise ValueError(
@@ -77,8 +87,8 @@ class TogetherChat(LLMProvider):
                 "requests package is required. Install with: pip install requests"
             )
 
-        # Merge kwargs
-        merged_kwargs = {**self.kwargs, **kwargs}
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
         
         # Convert messages to OpenAI-compatible format (Together follows OpenAI format)
         openai_messages = []
