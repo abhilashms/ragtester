@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragtester"
+version = "0.2.0"
+description = "A comprehensive Python library for testing and evaluating Retrieval-Augmented Generation (RAG) systems with LLM-generated questions and automated evaluation metrics"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "ABHILASH M S", email = "abhilashms230@gmail.com"}]
+license = "Apache-2.0"
+keywords = ["rag", "evaluation", "llm", "testing", "ai", "retrieval-augmented-generation", "nlp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Text Processing :: Linguistic"
+]
+
+dependencies = [
+    "PyPDF2>=3.0.0",
+    "python-docx>=0.8.11",
+    "requests>=2.28.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/abhilashms230/ragtester"
+"Bug Reports" = "https://github.com/abhilashms230/ragtester/issues"
+Source = "https://github.com/abhilashms230/ragtester"
+Documentation = "https://github.com/abhilashms230/ragtester#readme"
+
+[project.optional-dependencies]
+# LLM Provider Dependencies
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.7.0"]
+bedrock = ["boto3>=1.26.0"]
+grok = ["requests>=2.28.0"]
+gemini = ["google-generativeai>=0.3.0"]
+mistral = ["mistralai>=1.0.0"]
+cohere = ["cohere>=4.0.0"]
+huggingface = ["requests>=2.28.0"]
+fireworks = ["requests>=2.28.0"]
+together = ["requests>=2.28.0"]
+perplexity = ["requests>=2.28.0"]
+local-transformers = ["transformers>=4.30.0", "torch>=2.0.0"]
+local-llama = ["llama-cpp-python>=0.2.0"]
+
+# Data Processing
+data = ["numpy>=1.24.0", "pandas>=2.0.0"]
+
+# Development
+dev = [
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0"
+]
+
+# All optional dependencies
+all = [
+    "openai>=1.0.0",
+    "anthropic>=0.7.0", 
+    "boto3>=1.26.0",
+    "google-generativeai>=0.3.0",
+    "mistralai>=1.0.0",
+    "cohere>=4.0.0",
+    "transformers>=4.30.0",
+    "torch>=2.0.0",
+    "llama-cpp-python>=0.2.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ragtester*"]

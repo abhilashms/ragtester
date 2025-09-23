@@ -1,0 +1,143 @@
+from __future__ import annotations
+
+import os
+from typing import Any, Sequence
+
+from .base import LLMProvider
+from ..types import LLMMessage
+
+
+class AnthropicChat(LLMProvider):
+    """
+    Anthropic Claude LLM provider using the official Anthropic API.
+    Supports Claude 3.5 Sonnet, Claude 3.5 Haiku, and other Claude models.
+    """
+    
+    def __init__(self, model: str = "claude-3-5-sonnet-20241022", api_key: str = None, **kwargs: Any) -> None:
+        """
+        Initialize Anthropic Claude provider.
+        
+        Args:
+            model: Claude model name (e.g., 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022')
+            api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY environment variable)
+            **kwargs: Additional parameters
+        """
+        self.model = model
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        
+        # Store chat parameters separately from client parameters
+        self.chat_params = {
+            'temperature': kwargs.get('temperature', 0.7),
+            'max_tokens': kwargs.get('max_tokens', 1024),
+            'top_p': kwargs.get('top_p', 1.0)
+        }
+        
+        # Store other parameters that might be used by the client
+        self.client_kwargs = {k: v for k, v in kwargs.items() 
+                             if k not in ['temperature', 'max_tokens', 'top_p']}
+        
+        if not self.api_key:
+            raise ValueError(
+                "Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable "
+                "or pass api_key parameter."
+            )
+        
+        # Validate model name
+        self._validate_model()
+    
+    def _validate_model(self) -> None:
+        """Validate the model name format."""
+        valid_models = [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022", 
+            "claude-3-5-opus-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307",
+            "claude-2.1",
+            "claude-2.0",
+            "claude-instant-1.2"
+        ]
+        
+        if self.model not in valid_models:
+            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models}")
+
+    def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
+        """
+        Generate a response using Claude model.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            **kwargs: Additional generation parameters
+            
+        Returns:
+            Generated response text
+        """
+        try:
+            import anthropic
+        except ImportError:
+            raise ImportError(
+                "anthropic package is required. Install with: pip install anthropic"
+            )
+
+        # Merge chat parameters with any additional kwargs from the call
+        merged_chat_params = {**self.chat_params, **kwargs}
+        
+        # Initialize client with only client-specific parameters
+        client = anthropic.Anthropic(api_key=self.api_key, **self.client_kwargs)
+        
+        # Separate system message and conversation messages
+        system_message = ""
+        conversation_messages = []
+        
+        for msg in messages:
+            if msg["role"] == "system":
+                system_message = msg["content"]
+            else:
+                # Anthropic expects assistant/user roles
+                # Handle both text and multimodal content
+                if isinstance(msg["content"], list):
+                    # Multimodal content (for vision models)
+                    conversation_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+                else:
+                    # Text content
+                    conversation_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+        
+        # Prepare parameters
+        params = {
+            "model": self.model,
+            "max_tokens": merged_chat_params.get("max_tokens", 1024),
+            "temperature": merged_chat_params.get("temperature", 0.7),
+            "messages": conversation_messages
+        }
+        
+        # Add system message if present
+        if system_message:
+            params["system"] = system_message
+        
+        # Add other parameters if specified
+        if "top_p" in merged_chat_params:
+            params["top_p"] = merged_chat_params["top_p"]
+        if "top_k" in merged_chat_params:
+            params["top_k"] = merged_chat_params["top_k"]
+        if "stop_sequences" in merged_chat_params:
+            params["stop_sequences"] = merged_chat_params["stop_sequences"]
+        
+        try:
+            # Make the API call
+            response = client.messages.create(**params)
+            
+            # Extract the response content
+            if response.content and len(response.content) > 0:
+                return response.content[0].text
+            else:
+                return ""
+                
+        except Exception as e:
+            raise RuntimeError(f"Anthropic API call failed: {e}")
