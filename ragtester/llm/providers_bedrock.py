@@ -32,7 +32,7 @@ class BedrockLLM(LLMProvider):
         from ..logging_utils import get_logger
         self.logger = get_logger()
         
-        self.model_id = model or "anthropic.claude-3-5-sonnet-20241022-v1:0"
+        self.model_id = model or "us.anthropic.claude-sonnet-4-20250514-v1:0"
         self.region = region or "us-east-1"
         
         # Store chat parameters separately from client parameters
@@ -64,7 +64,9 @@ class BedrockLLM(LLMProvider):
     
     def _initialize_client(self) -> None:
         """Initialize the Bedrock client."""
-        self.logger.debug("🔧 Initializing Bedrock client...")
+        self.logger.info("🔧 Initializing Bedrock client...")
+        self.logger.info(f"  📍 Region: {self.region}")
+        self.logger.info(f"  🤖 Model: {self.model_id}")
         
         try:
             self.logger.debug("Importing boto3...")
@@ -73,39 +75,68 @@ class BedrockLLM(LLMProvider):
             self.logger.debug("✅ boto3 imported successfully")
             
             # Initialize Bedrock client
-            self.logger.debug(f"Creating Bedrock runtime client for region: {self.region}")
+            self.logger.info(f"Creating Bedrock runtime client for region: {self.region}")
             self.logger.debug(f"Client kwargs: {self.client_kwargs}")
             self._client = boto3.client(
                 'bedrock-runtime',
                 region_name=self.region,
                 **self.client_kwargs
             )
-            self.logger.debug("✅ Bedrock runtime client created successfully")
+            self.logger.info("✅ Bedrock runtime client created successfully")
             
             # Test the connection by listing available models
-            self.logger.debug("Testing Bedrock connection by listing available models...")
+            self.logger.info("🔍 Testing Bedrock connection by listing available models...")
             try:
                 bedrock_client = boto3.client('bedrock', region_name=self.region)
                 self.logger.debug("Created Bedrock list client")
                 
                 response = bedrock_client.list_foundation_models()
                 available_models = [model['modelId'] for model in response['modelSummaries']]
-                self.logger.debug(f"✅ Successfully listed {len(available_models)} available models")
-                self.logger.debug(f"Available models: {available_models[:5]}...")  # Show first 5 models
+                self.logger.info(f"✅ Successfully listed {len(available_models)} available models in {self.region}")
                 
-                if self.model_id not in available_models:
-                    self.logger.warning(f"⚠️ Model {self.model_id} may not be available in region {self.region}")
-                    self.logger.warning(f"Available models: {available_models[:5]}...")
+                # Filter models by provider for better visibility
+                anthropic_models = [m for m in available_models if 'anthropic' in m.lower()]
+                amazon_models = [m for m in available_models if 'amazon' in m.lower()]
+                meta_models = [m for m in available_models if 'meta' in m.lower()]
+                
+                self.logger.info(f"  🤖 Anthropic models ({len(anthropic_models)}): {anthropic_models}")
+                self.logger.info(f"  🏢 Amazon models ({len(amazon_models)}): {amazon_models}")
+                self.logger.info(f"  🦙 Meta models ({len(meta_models)}): {meta_models}")
+                
+                # Check if the model is available (both with and without region prefix)
+                model_found = False
+                if self.model_id in available_models:
+                    model_found = True
                 else:
-                    self.logger.debug(f"✅ Model {self.model_id} is available in region {self.region}")
+                    # Check if it's available with region prefix
+                    for prefix in ['us.', 'eu.', 'ap.']:
+                        prefixed_model = prefix + self.model_id
+                        if prefixed_model in available_models:
+                            model_found = True
+                            self.logger.info(f"✅ Model found with region prefix: {prefixed_model}")
+                            break
+                
+                if not model_found:
+                    self.logger.warning(f"⚠️ Model {self.model_id} not found in list_foundation_models() response")
+                    self.logger.warning(f"This doesn't necessarily mean the model is unavailable - it might:")
+                    self.logger.warning(f"  1. Require special permissions or access patterns")
+                    self.logger.warning(f"  2. Be available but not listed in foundation models")
+                    self.logger.warning(f"  3. Have different access requirements (inference profiles)")
+                    self.logger.info(f"Available Anthropic models: {anthropic_models}")
+                    self.logger.info(f"💡 Will attempt to use the model anyway - the real test is during invocation")
+                else:
+                    self.logger.info(f"✅ Model {self.model_id} is listed in available models")
                     
             except ClientError as e:
                 error_code = e.response['Error']['Code']
-                self.logger.error(f"❌ Bedrock API error: {error_code}")
-                self.logger.error(f"Error details: {e}")
+                error_message = e.response['Error']['Message']
+                self.logger.error(f"❌ Bedrock API error during model listing: {error_code}")
+                self.logger.error(f"Error message: {error_message}")
+                self.logger.error(f"Full error: {e}")
                 
                 if error_code == 'AccessDeniedException':
                     self.logger.error("❌ Access denied to Bedrock. Check your IAM permissions.")
+                    self.logger.error("Required permissions: bedrock:ListFoundationModels, bedrock:InvokeModel")
                     raise RuntimeError(f"Access denied to Bedrock in region {self.region}. Check your IAM permissions.")
                 elif error_code == 'UnauthorizedOperation':
                     self.logger.error("❌ Unauthorized operation. Check your AWS credentials and permissions.")
@@ -137,6 +168,19 @@ class BedrockLLM(LLMProvider):
     
     def _validate_model(self) -> str:
         """Validate and normalize the model name format."""
+        
+        # Normalize the model ID by removing region prefixes
+        normalized_model_id = self.model_id
+        if normalized_model_id.startswith('us.'):
+            normalized_model_id = normalized_model_id[3:]  # Remove 'us.' prefix
+            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
+        elif normalized_model_id.startswith('eu.'):
+            normalized_model_id = normalized_model_id[3:]  # Remove 'eu.' prefix
+            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
+        elif normalized_model_id.startswith('ap.'):
+            normalized_model_id = normalized_model_id[3:]  # Remove 'ap.' prefix
+            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
+        
         valid_models = [
             # Anthropic Claude Models
             "anthropic.claude-3-5-sonnet-20241022-v1:0",
@@ -209,7 +253,14 @@ class BedrockLLM(LLMProvider):
             "custom.model-name-v1:0",
         ]
         
-        return validate_model_name(self.model_id, valid_models, "AWS Bedrock")
+        # Validate the normalized model ID
+        validated_model_id = validate_model_name(normalized_model_id, valid_models, "AWS Bedrock")
+        
+        # Update the instance variable to use the normalized model ID
+        self.model_id = validated_model_id
+        self.logger.info(f"✅ Using normalized model ID: {validated_model_id}")
+        
+        return validated_model_id
     
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
@@ -223,7 +274,9 @@ class BedrockLLM(LLMProvider):
         Returns:
             Generated response text
         """
-        self.logger.debug(f"💬 Bedrock chat called with {len(messages)} messages")
+        self.logger.info(f"💬 Bedrock chat called with {len(messages)} messages")
+        self.logger.info(f"  🤖 Model: {self.model_id}")
+        self.logger.info(f"  📍 Region: {self.region}")
         
         # Validate messages format
         validate_messages_format(list(messages), "AWS Bedrock")
@@ -241,27 +294,30 @@ class BedrockLLM(LLMProvider):
         
         # Merge chat parameters with any additional kwargs from the call
         merged_chat_params = {**self.chat_params, **kwargs}
-        self.logger.debug(f"Merged chat parameters: {merged_chat_params}")
+        self.logger.info(f"📝 Request parameters: {merged_chat_params}")
         
         # Determine the request body format based on model
         if "anthropic" in self.model_id.lower():
-            self.logger.debug("Creating Anthropic request format...")
+            self.logger.info("🔧 Creating Anthropic request format...")
             request_body = self._create_anthropic_request(formatted_messages, merged_chat_params)
         else:
-            self.logger.debug("Creating generic request format...")
+            self.logger.info("🔧 Creating generic request format...")
             # Generic format for other models
             request_body = self._create_generic_request(formatted_messages, merged_chat_params)
         
         self.logger.debug(f"Request body: {request_body}")
         
         try:
-            self.logger.debug(f"🚀 Invoking Bedrock model: {self.model_id}")
+            self.logger.info(f"🚀 Invoking Bedrock model: {self.model_id}")
+            self.logger.info(f"  📍 Region: {self.region}")
+            self.logger.info(f"  📝 Request size: {len(json.dumps(request_body))} bytes")
+            
             response = self._client.invoke_model(
                 modelId=self.model_id,
                 body=json.dumps(request_body),
                 contentType="application/json"
             )
-            self.logger.debug("✅ Bedrock API call successful")
+            self.logger.info("✅ Bedrock API call successful")
             
             response_body = json.loads(response['body'].read())
             self.logger.debug(f"Response body: {response_body}")
@@ -269,14 +325,14 @@ class BedrockLLM(LLMProvider):
             # Extract text based on model type
             if "anthropic" in self.model_id.lower():
                 response_text = response_body['content'][0]['text']
-                self.logger.debug(f"✅ Extracted Anthropic response: {response_text[:100]}...")
+                self.logger.info(f"✅ Extracted Anthropic response: {response_text[:100]}...")
             elif "amazon" in self.model_id.lower():
                 response_text = response_body['generation']
-                self.logger.debug(f"✅ Extracted Amazon response: {response_text[:100]}...")
+                self.logger.info(f"✅ Extracted Amazon response: {response_text[:100]}...")
             else:
                 # Generic extraction
                 response_text = response_body.get('outputs', [{}])[0].get('text', '')
-                self.logger.debug(f"✅ Extracted generic response: {response_text[:100]}...")
+                self.logger.info(f"✅ Extracted generic response: {response_text[:100]}...")
             
             return response_text
                 
@@ -287,21 +343,63 @@ class BedrockLLM(LLMProvider):
             self.logger.error(f"Model ID: {self.model_id}")
             self.logger.error(f"Region: {self.region}")
             
+            # Log detailed error information
+            if hasattr(e, 'response'):
+                self.logger.error(f"Response status: {e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'Unknown')}")
+                if 'Error' in e.response:
+                    error_info = e.response['Error']
+                    self.logger.error(f"Error code: {error_info.get('Code', 'Unknown')}")
+                    self.logger.error(f"Error message: {error_info.get('Message', 'Unknown')}")
+                    if 'RequestId' in e.response.get('ResponseMetadata', {}):
+                        self.logger.error(f"Request ID: {e.response['ResponseMetadata']['RequestId']}")
+            
             # Provide specific guidance for common errors
             if "on-demand throughput isn't supported" in error_msg:
-                self.logger.error("💡 Solution: This model requires an inference profile.")
-                self.logger.error("   Option 1: Use a different model that supports on-demand access")
-                self.logger.error("   Option 2: Create an inference profile in AWS Bedrock console")
+                self.logger.error("🚨 DETAILED ERROR ANALYSIS:")
+                self.logger.error("   ❌ Problem: The model requires inference profiles for on-demand access")
+                self.logger.error("   ❌ This model doesn't support direct on-demand invocation")
+                self.logger.error("   ❌ AWS Bedrock has different access models for different model variants")
+                
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   Option 1: Create an inference profile in AWS Bedrock console")
+                self.logger.error("   Option 2: Use a different model that supports on-demand access")
                 self.logger.error("   Option 3: Use these models that support on-demand access:")
-                self.logger.error("     - anthropic.claude-sonnet-4-20250514-v1:0 (Available in your region)")
-                self.logger.error("     - anthropic.claude-3-5-sonnet-20241022-v1:0")
-                self.logger.error("     - amazon.titan-text-express-v1")
-                self.logger.error("     - meta.llama3-8b-instruct-v1:0")
+                self.logger.error("     ✅ anthropic.claude-sonnet-4-20250514-v1:0 (Recommended)")
+                self.logger.error("     ✅ anthropic.claude-3-5-sonnet-20241022-v1:0")
+                self.logger.error("     ✅ amazon.titan-text-express-v1")
+                self.logger.error("     ✅ meta.llama3-8b-instruct-v1:0")
+                
+                self.logger.error("🔧 IMMEDIATE FIX:")
+                self.logger.error("   Option A: Create inference profile for this model in AWS console")
+                self.logger.error("   Option B: Change your model configuration to:")
+                self.logger.error("   model='anthropic.claude-sonnet-4-20250514-v1:0'")
+                
+                self.logger.error("📋 INFERENCE PROFILE SETUP:")
+                self.logger.error("   1. Go to AWS Bedrock console")
+                self.logger.error("   2. Navigate to 'Inference profiles'")
+                self.logger.error("   3. Create a new profile with this model")
+                self.logger.error("   4. Use the profile ARN instead of model ID")
                 
                 # Suggest the available model from the error logs
                 suggested_model = self._get_suggested_alternative_model()
                 if suggested_model:
                     self.logger.error(f"   💡 Recommended: Use '{suggested_model}' (available in your region)")
+            
+            elif "AccessDeniedException" in error_msg:
+                self.logger.error("🚨 ACCESS DENIED ERROR:")
+                self.logger.error("   ❌ Your AWS credentials don't have permission to invoke Bedrock models")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Check your IAM permissions")
+                self.logger.error("   2. Ensure you have bedrock:InvokeModel permission")
+                self.logger.error("   3. Verify your AWS credentials with: aws sts get-caller-identity")
+            
+            elif "ValidationException" in error_msg:
+                self.logger.error("🚨 VALIDATION ERROR:")
+                self.logger.error("   ❌ The request parameters are invalid")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Check if the model ID is correct")
+                self.logger.error("   2. Verify the model is available in your region")
+                self.logger.error("   3. Check request body format")
             
             # Use enhanced error handling
             handle_api_error(e, "AWS Bedrock", f"Model: {self.model_id}, Region: {self.region}")
