@@ -112,7 +112,12 @@ class CohereChat(LLMProvider):
             content = msg["content"]
             
             if role == "system":
-                system_message = content
+                # Handle both text and multimodal content for system messages
+                if isinstance(content, str):
+                    system_message = content
+                else:
+                    # For multimodal content, convert to string representation
+                    system_message = str(content)
             elif role == "user":
                 conversation_parts.append(f"Human: {content}")
             elif role == "assistant":

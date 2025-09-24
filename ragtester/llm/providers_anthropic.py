@@ -125,7 +125,13 @@ class AnthropicChat(LLMProvider):
         
         for msg in messages:
             if msg["role"] == "system":
-                system_message = msg["content"]
+                # Handle both text and multimodal content for system messages
+                content = msg["content"]
+                if isinstance(content, str):
+                    system_message = content
+                else:
+                    # For multimodal content, convert to string representation
+                    system_message = str(content)
             else:
                 # Anthropic expects assistant/user roles
                 # Handle both text and multimodal content

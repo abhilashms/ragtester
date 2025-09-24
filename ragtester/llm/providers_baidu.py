@@ -100,10 +100,18 @@ class BaiduLLM(LLMProvider):
                 baidu_messages.append({"role": "assistant", "content": msg["content"]})
             elif msg["role"] == "system":
                 # Baidu doesn't have system messages, prepend to first user message
-                if baidu_messages and baidu_messages[0]["role"] == "user":
-                    baidu_messages[0]["content"] = f"System: {msg['content']}\n\n{baidu_messages[0]['content']}"
+                # Handle both text and multimodal content
+                content = msg["content"]
+                if isinstance(content, str):
+                    system_text = content
                 else:
-                    baidu_messages.append({"role": "user", "content": f"System: {msg['content']}"})
+                    # For multimodal content, convert to string representation
+                    system_text = str(content)
+                
+                if baidu_messages and baidu_messages[0]["role"] == "user":
+                    baidu_messages[0]["content"] = f"System: {system_text}\n\n{baidu_messages[0]['content']}"
+                else:
+                    baidu_messages.append({"role": "user", "content": f"System: {system_text}"})
         
         # Prepare request payload
         payload = {

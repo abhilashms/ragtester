@@ -307,8 +307,13 @@ class BedrockLLM(LLMProvider):
             
             if role == "system":
                 # For Anthropic models, system messages are handled separately
-                formatted.append({"role": "user", "content": f"System: {content}"})
+                if isinstance(content, str):
+                    formatted.append({"role": "user", "content": f"System: {content}"})
+                else:
+                    # Handle multimodal system messages
+                    formatted.append({"role": "user", "content": f"System: {str(content)}"})
             elif role in ["user", "assistant"]:
+                # Handle both text and multimodal content
                 formatted.append({"role": role, "content": content})
         
         return formatted
@@ -320,8 +325,10 @@ class BedrockLLM(LLMProvider):
         chat_messages = []
         
         for msg in messages:
-            if msg["role"] == "user" and msg["content"].startswith("System: "):
-                system_message = msg["content"][8:]  # Remove "System: " prefix
+            # Handle both text and multimodal content
+            content = msg["content"]
+            if isinstance(content, str) and msg["role"] == "user" and content.startswith("System: "):
+                system_message = content[8:]  # Remove "System: " prefix
             else:
                 chat_messages.append(msg)
         

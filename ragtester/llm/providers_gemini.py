@@ -128,7 +128,12 @@ class GeminiChat(LLMProvider):
             content = msg["content"]
             
             if role == "system":
-                system_instruction = content
+                # Handle both text and multimodal content for system messages
+                if isinstance(content, str):
+                    system_instruction = content
+                else:
+                    # For multimodal content, convert to string representation
+                    system_instruction = str(content)
             elif role == "user":
                 conversation_history.append({"role": "user", "parts": [content]})
             elif role == "assistant":
