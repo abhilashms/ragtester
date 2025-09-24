@@ -32,8 +32,19 @@ class BedrockLLM(LLMProvider):
         from ..logging_utils import get_logger
         self.logger = get_logger()
         
-        self.model_id = model or "us.anthropic.claude-sonnet-4-20250514-v1:0"
+        self.logger.info("🚀 INITIALIZING BEDROCK LLM PROVIDER")
+        self.logger.info("=" * 50)
+        self.logger.info(f"📥 Input parameters:")
+        self.logger.info(f"  🤖 Model: {model}")
+        self.logger.info(f"  📍 Region: {region}")
+        self.logger.info(f"  ⚙️ Additional kwargs: {kwargs}")
+        
+        self.model_id = model or "us.anthropic.claude-3-5-haiku-20241022-v1:0"
         self.region = region or "us-east-1"
+        
+        self.logger.info(f"📤 Resolved parameters:")
+        self.logger.info(f"  🤖 Model ID: {self.model_id}")
+        self.logger.info(f"  📍 Region: {self.region}")
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -74,15 +85,38 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError, NoCredentialsError
             self.logger.debug("✅ boto3 imported successfully")
             
+            # Check AWS credentials
+            self.logger.info("🔑 CHECKING AWS CREDENTIALS")
+            self.logger.info("-" * 30)
+            try:
+                # Try to get AWS session info
+                session = boto3.Session()
+                credentials = session.get_credentials()
+                if credentials:
+                    self.logger.info("✅ AWS credentials found")
+                    self.logger.info(f"  🔑 Access Key ID: {credentials.access_key[:4]}...{credentials.access_key[-4:]}")
+                    self.logger.info(f"  🔑 Secret Key: {'*' * 20}")
+                    self.logger.info(f"  🔑 Session Token: {'Present' if credentials.token else 'None'}")
+                else:
+                    self.logger.warning("⚠️ No AWS credentials found in session")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not check credentials: {e}")
+            
             # Initialize Bedrock client
-            self.logger.info(f"Creating Bedrock runtime client for region: {self.region}")
-            self.logger.debug(f"Client kwargs: {self.client_kwargs}")
+            self.logger.info(f"🔧 CREATING BEDROCK RUNTIME CLIENT")
+            self.logger.info("-" * 30)
+            self.logger.info(f"  📍 Region: {self.region}")
+            self.logger.info(f"  ⚙️ Client kwargs: {self.client_kwargs}")
+            self.logger.info(f"  🔧 Service: bedrock-runtime")
+            
             self._client = boto3.client(
                 'bedrock-runtime',
                 region_name=self.region,
                 **self.client_kwargs
             )
             self.logger.info("✅ Bedrock runtime client created successfully")
+            self.logger.info(f"  🆔 Client endpoint: {self._client._endpoint}")
+            self.logger.info(f"  📍 Client region: {self._client._client_config.region_name}")
             
             # Test the connection by listing available models
             self.logger.info("🔍 Testing Bedrock connection by listing available models...")
@@ -169,20 +203,16 @@ class BedrockLLM(LLMProvider):
     def _validate_model(self) -> str:
         """Validate and normalize the model name format."""
         
-        # Normalize the model ID by removing region prefixes
-        normalized_model_id = self.model_id
-        if normalized_model_id.startswith('us.'):
-            normalized_model_id = normalized_model_id[3:]  # Remove 'us.' prefix
-            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
-        elif normalized_model_id.startswith('eu.'):
-            normalized_model_id = normalized_model_id[3:]  # Remove 'eu.' prefix
-            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
-        elif normalized_model_id.startswith('ap.'):
-            normalized_model_id = normalized_model_id[3:]  # Remove 'ap.' prefix
-            self.logger.info(f"🔧 Normalized model ID: {self.model_id} -> {normalized_model_id}")
+        # Store original model ID for logging
+        original_model_id = self.model_id
+        self.logger.info(f"🔧 Original model ID: {original_model_id}")
+        
+        # The validate_model_name function will handle normalization
+        # We'll let it normalize and then use the result
+        normalized_model_id = original_model_id
         
         valid_models = [
-            # Anthropic Claude Models
+            # Anthropic Claude Models (without region prefix)
             "anthropic.claude-3-5-sonnet-20241022-v1:0",
             "anthropic.claude-3-5-haiku-20241022-v1:0",
             "anthropic.claude-3-5-opus-20241022-v1:0",
@@ -192,7 +222,19 @@ class BedrockLLM(LLMProvider):
             "anthropic.claude-2.1-v1:0",
             "anthropic.claude-2.0-v1:0",
             "anthropic.claude-instant-1.2-v1:0",
-            "anthropic.claude-sonnet-4-20250514-v1:0",  # Add the available model
+            "anthropic.claude-sonnet-4-20250514-v1:0",
+            
+            # Anthropic Claude Models (with US region prefix)
+            "us.anthropic.claude-3-5-sonnet-20241022-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "us.anthropic.claude-3-5-opus-20241022-v1:0",
+            "us.anthropic.claude-3-opus-20240229-v1:0",
+            "us.anthropic.claude-3-sonnet-20240229-v1:0",
+            "us.anthropic.claude-3-haiku-20240307-v1:0",
+            "us.anthropic.claude-2.1-v1:0",
+            "us.anthropic.claude-2.0-v1:0",
+            "us.anthropic.claude-instant-1.2-v1:0",
+            "us.anthropic.claude-sonnet-4-20250514-v1:0",
             
             # Amazon Titan Models
             "amazon.titan-text-express-v1",
@@ -311,13 +353,26 @@ class BedrockLLM(LLMProvider):
             self.logger.info(f"🚀 Invoking Bedrock model: {self.model_id}")
             self.logger.info(f"  📍 Region: {self.region}")
             self.logger.info(f"  📝 Request size: {len(json.dumps(request_body))} bytes")
+            self.logger.info(f"  🔧 Content type: application/json")
+            self.logger.info(f"  ⏰ Timestamp: {json.dumps(request_body, indent=2)[:500]}...")
+            
+            # Log the exact request being sent
+            self.logger.debug(f"🔍 EXACT REQUEST BEING SENT:")
+            self.logger.debug(f"  modelId: {self.model_id}")
+            self.logger.debug(f"  body: {json.dumps(request_body, indent=2)}")
+            self.logger.debug(f"  contentType: application/json")
             
             response = self._client.invoke_model(
                 modelId=self.model_id,
                 body=json.dumps(request_body),
                 contentType="application/json"
             )
+            
+            # Log response metadata
             self.logger.info("✅ Bedrock API call successful")
+            self.logger.info(f"  📊 Response status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'Unknown')}")
+            self.logger.info(f"  🆔 Request ID: {response.get('ResponseMetadata', {}).get('RequestId', 'Unknown')}")
+            self.logger.info(f"  📏 Response size: {len(response.get('body', b''))} bytes")
             
             response_body = json.loads(response['body'].read())
             self.logger.debug(f"Response body: {response_body}")
@@ -343,15 +398,45 @@ class BedrockLLM(LLMProvider):
             self.logger.error(f"Model ID: {self.model_id}")
             self.logger.error(f"Region: {self.region}")
             
+            # Log comprehensive error information
+            self.logger.error(f"🔍 DETAILED ERROR ANALYSIS:")
+            self.logger.error(f"  📍 Full error message: {error_msg}")
+            self.logger.error(f"  🏷️ Error type: {type(e).__name__}")
+            self.logger.error(f"  📍 Module: {e.__class__.__module__}")
+            self.logger.error(f"  📍 Class: {e.__class__.__name__}")
+            
+            # Log request details that failed
+            self.logger.error(f"🔍 REQUEST DETAILS THAT FAILED:")
+            self.logger.error(f"  🤖 Model ID: {self.model_id}")
+            self.logger.error(f"  📍 Region: {self.region}")
+            self.logger.error(f"  📝 Request body: {json.dumps(request_body, indent=2)}")
+            self.logger.error(f"  🔧 Content type: application/json")
+            
             # Log detailed error information
             if hasattr(e, 'response'):
-                self.logger.error(f"Response status: {e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'Unknown')}")
+                self.logger.error(f"🔍 AWS RESPONSE DETAILS:")
+                self.logger.error(f"  📊 Response status: {e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'Unknown')}")
+                self.logger.error(f"  🆔 Request ID: {e.response.get('ResponseMetadata', {}).get('RequestId', 'Unknown')}")
+                self.logger.error(f"  📏 Response size: {len(str(e.response))} bytes")
+                
                 if 'Error' in e.response:
                     error_info = e.response['Error']
-                    self.logger.error(f"Error code: {error_info.get('Code', 'Unknown')}")
-                    self.logger.error(f"Error message: {error_info.get('Message', 'Unknown')}")
-                    if 'RequestId' in e.response.get('ResponseMetadata', {}):
-                        self.logger.error(f"Request ID: {e.response['ResponseMetadata']['RequestId']}")
+                    self.logger.error(f"  🚨 Error code: {error_info.get('Code', 'Unknown')}")
+                    self.logger.error(f"  📝 Error message: {error_info.get('Message', 'Unknown')}")
+                    self.logger.error(f"  🏷️ Error type: {error_info.get('Type', 'Unknown')}")
+                    
+                    # Log additional error details if available
+                    if 'Detail' in error_info:
+                        self.logger.error(f"  📋 Error details: {error_info['Detail']}")
+                
+                # Log full response for debugging
+                self.logger.debug(f"🔍 FULL AWS RESPONSE:")
+                self.logger.debug(f"  {json.dumps(e.response, indent=2, default=str)}")
+            
+            # Log stack trace for debugging
+            import traceback
+            self.logger.debug(f"🔍 FULL STACK TRACE:")
+            self.logger.debug(f"  {traceback.format_exc()}")
             
             # Provide specific guidance for common errors
             if "on-demand throughput isn't supported" in error_msg:
@@ -489,12 +574,18 @@ class BedrockLLM(LLMProvider):
         
         prompt = "\n\n".join(text_parts) + "\n\nAssistant:"
         
+        # Use model-specific parameter names
+        config = {
+            "maxTokenCount": kwargs.get('max_tokens', 1024),
+            "temperature": kwargs.get('temperature', 0.7),
+            "topP": kwargs.get('top_p', 0.9),
+            "stopSequences": kwargs.get('stop_sequences', [])
+        }
+        
+        # Remove None values and empty sequences
+        config = {k: v for k, v in config.items() if v is not None and v != []}
+        
         return {
             "inputText": prompt,
-            "textGenerationConfig": {
-                "maxTokenCount": kwargs.get('max_tokens', 1024),
-                "temperature": kwargs.get('temperature', 0.7),
-                "topP": kwargs.get('top_p', 0.9),
-                "stopSequences": kwargs.get('stop_sequences', [])
-            }
+            "textGenerationConfig": config
         }
