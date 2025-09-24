@@ -145,7 +145,7 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
             from .providers_bedrock import BedrockLLM
             logger.debug(f"Initializing Bedrock with model: {model_name}, region: {kwargs.get('region', 'us-east-1')}")
             
-            # Bedrock expects: model, region, and other kwargs (no api_key, base_url)
+            # Bedrock expects: model, region, inference_profile_arn, and other kwargs (no api_key, base_url)
             bedrock_kwargs = {k: v for k, v in kwargs.items() if k not in ['api_key', 'base_url']}
             logger.debug(f"Filtered Bedrock kwargs: {bedrock_kwargs}")
             

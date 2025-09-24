@@ -19,13 +19,15 @@ class BedrockLLM(LLMProvider):
     AWS Bedrock LLM provider that supports various Bedrock models including Claude.
     """
     
-    def __init__(self, model: str = None, region: str = None, **kwargs: Any) -> None:
+    def __init__(self, model: str = None, region: str = None, inference_profile_arn: str = None, auto_inference_profile: bool = True, **kwargs: Any) -> None:
         """
         Initialize Bedrock LLM provider.
         
         Args:
             model: Bedrock model ID (e.g., 'anthropic.claude-sonnet-4-20250514-v1:0')
             region: AWS region (defaults to us-east-1)
+            inference_profile_arn: Inference profile ARN (if model requires inference profile)
+            auto_inference_profile: Whether to automatically find and use inference profiles (default: True)
             **kwargs: Additional parameters
         """
         # Import logging utilities
@@ -37,17 +39,18 @@ class BedrockLLM(LLMProvider):
         self.logger.info(f"📥 Input parameters:")
         self.logger.info(f"  🤖 Model: {model}")
         self.logger.info(f"  📍 Region: {region}")
+        self.logger.info(f"  🔗 Inference Profile ARN: {inference_profile_arn}")
         self.logger.info(f"  ⚙️ Additional kwargs: {kwargs}")
         
         self.model_id = model or "us.anthropic.claude-3-5-haiku-20241022-v1:0"
         self.region = region or "us-east-1"
+        self.inference_profile_arn = inference_profile_arn
+        self.auto_inference_profile = auto_inference_profile
         
         # Validate region format
-        if not self.region or not isinstance(self.region, str):
-            self.logger.warning(f"⚠️ Invalid region '{self.region}', defaulting to 'us-east-1'")
-            self.region = "us-east-1"
-        elif self.region.strip() == "":
-            self.logger.warning(f"⚠️ Empty region, defaulting to 'us-east-1'")
+        if not self.region or not isinstance(self.region, str) or self.region.strip() == "":
+            original_region = self.region
+            self.logger.warning(f"⚠️ Invalid region '{original_region}', defaulting to 'us-east-1'")
             self.region = "us-east-1"
         
         # Common AWS regions for Bedrock
@@ -63,6 +66,9 @@ class BedrockLLM(LLMProvider):
         self.logger.info(f"📤 Resolved parameters:")
         self.logger.info(f"  🤖 Model ID: {self.model_id}")
         self.logger.info(f"  📍 Region: {self.region}")
+        if self.inference_profile_arn:
+            self.logger.info(f"  🔗 Inference Profile ARN: {self.inference_profile_arn}")
+            self.logger.info(f"  ✅ Using inference profile for model access")
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -89,6 +95,7 @@ class BedrockLLM(LLMProvider):
         # Validate and normalize model name
         self.model_id = self._validate_model()
         
+        # Initialize Bedrock client (unless explicitly skipped for testing)
         self._initialize_client()
     
     def _initialize_client(self) -> None:
@@ -230,23 +237,77 @@ class BedrockLLM(LLMProvider):
         
         # Check if this is a model that requires inference profiles
         if self._requires_inference_profile(normalized_model_id):
-            self.logger.warning(f"⚠️ Model {normalized_model_id} may require an inference profile")
-            self.logger.warning(f"   This model doesn't support on-demand throughput")
-            
-            # Try to suggest an alternative without :0 suffix
-            alternative_model = self._get_alternative_model(normalized_model_id)
-            if alternative_model:
-                self.logger.info(f"💡 SUGGESTED ALTERNATIVE: {alternative_model}")
-                self.logger.info(f"   This model supports on-demand throughput")
-                self.logger.info(f"   You can use this model instead or create an inference profile")
+            if self.inference_profile_arn:
+                # User has provided an inference profile ARN
+                self.logger.info(f"✅ Using provided inference profile for model {normalized_model_id}")
+                self.logger.info(f"   🔗 Inference Profile ARN: {self.inference_profile_arn}")
+                self.logger.info(f"   ✅ This should work with your configured inference profile")
+                # Don't change the model ID - use the original with the inference profile
+            elif self.auto_inference_profile:
+                # Try to automatically find and use an inference profile
+                self.logger.info(f"🔍 Auto-detecting inference profile for model {normalized_model_id}")
+                auto_profile_arn = self._auto_discover_inference_profile(normalized_model_id)
                 
-                # Ask user preference - for now, we'll use the alternative
-                self.logger.info(f"🔄 Auto-switching to alternative model: {alternative_model}")
-                normalized_model_id = alternative_model
+                if auto_profile_arn:
+                    self.logger.info(f"✅ Auto-discovered inference profile!")
+                    self.logger.info(f"   🔗 Inference Profile ARN: {auto_profile_arn}")
+                    self.logger.info(f"   🚀 Using inference profile automatically")
+                    self.inference_profile_arn = auto_profile_arn
+                else:
+                    # No inference profile found, suggest alternatives
+                    self.logger.warning(f"⚠️ No inference profile found for {normalized_model_id}")
+                    self.logger.warning(f"   This model doesn't support on-demand throughput")
+                    
+                    # Try to suggest an alternative without :0 suffix
+                    alternative_model = self._get_alternative_model(normalized_model_id)
+                    if alternative_model:
+                        self.logger.info(f"💡 SUGGESTED ALTERNATIVE: {alternative_model}")
+                        self.logger.info(f"   This model supports on-demand throughput")
+                        self.logger.info(f"   You can use this model instead or create an inference profile")
+                        
+                        # Check if the alternative is actually available
+                        if self._check_model_availability(alternative_model):
+                            self.logger.info(f"🔄 Auto-switching to alternative model: {alternative_model}")
+                            normalized_model_id = alternative_model
+                        else:
+                            self.logger.warning(f"⚠️ Suggested alternative {alternative_model} is not available")
+                            self.logger.warning(f"   Will continue with original model - may require inference profile")
+                    else:
+                        self.logger.error(f"❌ No alternative model found for {normalized_model_id}")
+                        self.logger.error(f"   Please create an inference profile in AWS Bedrock console")
+                        self.logger.error(f"   Or use a different model that supports on-demand access")
+                        self.logger.error(f"   Available models vary by region and account permissions")
+                        
+                        # List some available models to help user
+                        self._log_available_models_suggestion()
             else:
-                self.logger.error(f"❌ No alternative model found for {normalized_model_id}")
-                self.logger.error(f"   Please create an inference profile in AWS Bedrock console")
-                self.logger.error(f"   Or use a different model that supports on-demand access")
+                # Auto-discovery disabled, suggest alternatives
+                self.logger.warning(f"⚠️ Model {normalized_model_id} may require an inference profile")
+                self.logger.warning(f"   This model doesn't support on-demand throughput")
+                self.logger.warning(f"   Auto-discovery is disabled. Enable with auto_inference_profile=True")
+                
+                # Try to suggest an alternative without :0 suffix
+                alternative_model = self._get_alternative_model(normalized_model_id)
+                if alternative_model:
+                    self.logger.info(f"💡 SUGGESTED ALTERNATIVE: {alternative_model}")
+                    self.logger.info(f"   This model supports on-demand throughput")
+                    self.logger.info(f"   You can use this model instead or create an inference profile")
+                    
+                    # Check if the alternative is actually available
+                    if self._check_model_availability(alternative_model):
+                        self.logger.info(f"🔄 Auto-switching to alternative model: {alternative_model}")
+                        normalized_model_id = alternative_model
+                    else:
+                        self.logger.warning(f"⚠️ Suggested alternative {alternative_model} is not available")
+                        self.logger.warning(f"   Will continue with original model - may require inference profile")
+                else:
+                    self.logger.error(f"❌ No alternative model found for {normalized_model_id}")
+                    self.logger.error(f"   Please create an inference profile in AWS Bedrock console")
+                    self.logger.error(f"   Or use a different model that supports on-demand access")
+                    self.logger.error(f"   Available models vary by region and account permissions")
+                    
+                    # List some available models to help user
+                    self._log_available_models_suggestion()
         
         valid_models = [
             # Anthropic Claude Models (without region prefix)
@@ -411,20 +472,26 @@ class BedrockLLM(LLMProvider):
         self.logger.debug(f"Request body: {request_body}")
         
         try:
-            self.logger.info(f"🚀 Invoking Bedrock model: {self.model_id}")
+            # Determine what to use as the model identifier
+            model_identifier = self.inference_profile_arn if self.inference_profile_arn else self.model_id
+            
+            self.logger.info(f"🚀 Invoking Bedrock model: {model_identifier}")
             self.logger.info(f"  📍 Region: {self.region}")
             self.logger.info(f"  📝 Request size: {len(json.dumps(request_body))} bytes")
             self.logger.info(f"  🔧 Content type: application/json")
-            self.logger.info(f"  ⏰ Timestamp: {json.dumps(request_body, indent=2)[:500]}...")
+            if self.inference_profile_arn:
+                self.logger.info(f"  🔗 Using inference profile ARN")
+            else:
+                self.logger.info(f"  🤖 Using direct model ID")
             
             # Log the exact request being sent
             self.logger.debug(f"🔍 EXACT REQUEST BEING SENT:")
-            self.logger.debug(f"  modelId: {self.model_id}")
+            self.logger.debug(f"  modelId: {model_identifier}")
             self.logger.debug(f"  body: {json.dumps(request_body, indent=2)}")
             self.logger.debug(f"  contentType: application/json")
             
             response = self._client.invoke_model(
-                modelId=self.model_id,
+                modelId=model_identifier,
                 body=json.dumps(request_body),
                 contentType="application/json"
             )
@@ -679,14 +746,21 @@ class BedrockLLM(LLMProvider):
     
     def _get_alternative_model(self, model_id: str) -> Optional[str]:
         """Get an alternative model that supports on-demand access."""
-        # Mapping of models that require inference profiles to alternatives
-        alternatives = {
-            "anthropic.claude-3-5-haiku-20241022-v1:0": "anthropic.claude-sonnet-4-20250514-v1:0",
-            "us.anthropic.claude-3-5-haiku-20241022-v1:0": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-            "eu.anthropic.claude-3-5-haiku-20241022-v1:0": "eu.anthropic.claude-sonnet-4-20250514-v1:0",
-            "ap.anthropic.claude-3-5-haiku-20241022-v1:0": "ap.anthropic.claude-sonnet-4-20250514-v1:0",
-        }
-        return alternatives.get(model_id)
+        # Try to find an available alternative from the models we know are available
+        available_alternatives = self._get_available_alternative_models()
+        
+        if not available_alternatives:
+            # Fallback to hardcoded alternatives if we can't determine availability
+            alternatives = {
+                "anthropic.claude-3-5-haiku-20241022-v1:0": "anthropic.claude-3-5-sonnet-20241022-v1:0",
+                "us.anthropic.claude-3-5-haiku-20241022-v1:0": "us.anthropic.claude-3-5-sonnet-20241022-v1:0",
+                "eu.anthropic.claude-3-5-haiku-20241022-v1:0": "eu.anthropic.claude-3-5-sonnet-20241022-v1:0",
+                "ap.anthropic.claude-3-5-haiku-20241022-v1:0": "ap.anthropic.claude-3-5-sonnet-20241022-v1:0",
+            }
+            return alternatives.get(model_id)
+        
+        # Find the best alternative from available models
+        return self._find_best_alternative(model_id, available_alternatives)
     
     def _get_suggested_alternative_model(self) -> Optional[str]:
         """Get a suggested alternative model based on the current model and available models."""
@@ -698,6 +772,322 @@ class BedrockLLM(LLMProvider):
         elif "llama" in self.model_id.lower():
             return "meta.llama3-8b-instruct-v1:0"
         return None
+    
+    def _get_available_alternative_models(self) -> list:
+        """Get list of available alternative models that support on-demand access."""
+        try:
+            import boto3
+            from botocore.exceptions import ClientError
+            
+            # Create a temporary client for checking model availability
+            temp_client = boto3.client('bedrock', region_name=self.region)
+            
+            # List foundation models to check availability
+            response = temp_client.list_foundation_models()
+            available_models = [model['modelId'] for model in response['modelSummaries']]
+            
+            # Filter for models that typically support on-demand access
+            on_demand_models = [
+                "anthropic.claude-3-5-sonnet-20241022-v1:0",
+                "anthropic.claude-3-opus-20240229-v1:0",
+                "anthropic.claude-3-sonnet-20240229-v1:0",
+                "anthropic.claude-3-haiku-20240307-v1:0",
+                "anthropic.claude-sonnet-4-20250514-v1:0",
+                "amazon.titan-text-express-v1",
+                "amazon.titan-text-lite-v1",
+                "meta.llama3-8b-instruct-v1:0",
+                "meta.llama3-70b-instruct-v1:0",
+                "cohere.command-text-v14",
+                "cohere.command-light-text-v14",
+            ]
+            
+            # Add region-prefixed versions
+            region_prefixes = ['us.', 'eu.', 'ap.']
+            for prefix in region_prefixes:
+                on_demand_models.extend([prefix + model for model in on_demand_models if not model.startswith(prefix)])
+            
+            # Filter to only include available models
+            available_alternatives = [model for model in on_demand_models if model in available_models]
+            
+            if available_alternatives:
+                self.logger.info(f"✅ Found {len(available_alternatives)} available alternative models")
+            else:
+                self.logger.warning(f"⚠️ No alternative models found in available models")
+            
+            return available_alternatives
+            
+        except Exception as e:
+            self.logger.warning(f"⚠️ Could not get available alternative models: {e}")
+            return []
+    
+    def _find_best_alternative(self, original_model: str, available_alternatives: list) -> Optional[str]:
+        """Find the best alternative model based on the original model."""
+        if not available_alternatives:
+            return None
+        
+        # Extract region prefix from original model
+        region_prefix = ""
+        for prefix in ['us.', 'eu.', 'ap.']:
+            if original_model.startswith(prefix):
+                region_prefix = prefix
+                break
+        
+        # Prefer models with the same region prefix
+        if region_prefix:
+            prefixed_alternatives = [model for model in available_alternatives if model.startswith(region_prefix)]
+            if prefixed_alternatives:
+                # Prefer Claude models if original is Claude
+                if 'claude' in original_model.lower():
+                    claude_alternatives = [model for model in prefixed_alternatives if 'claude' in model.lower()]
+                    if claude_alternatives:
+                        return claude_alternatives[0]
+                return prefixed_alternatives[0]
+        
+        # Fallback to any available alternative
+        # Prefer Claude models if original is Claude
+        if 'claude' in original_model.lower():
+            claude_alternatives = [model for model in available_alternatives if 'claude' in model.lower()]
+            if claude_alternatives:
+                return claude_alternatives[0]
+        
+        return available_alternatives[0]
+    
+    def _auto_discover_inference_profile(self, model_id: str) -> Optional[str]:
+        """
+        Automatically discover and return an inference profile ARN for the given model.
+        
+        Args:
+            model_id: The model ID that requires an inference profile
+            
+        Returns:
+            The inference profile ARN if found, None otherwise
+        """
+        try:
+            import boto3
+            from botocore.exceptions import ClientError
+            
+            self.logger.info(f"🔍 Searching for inference profiles in region {self.region}")
+            
+            # Create a temporary client for checking inference profiles
+            temp_client = boto3.client('bedrock', region_name=self.region)
+            
+            # List inference profiles
+            response = temp_client.list_inference_profiles()
+            profiles = response.get('inferenceProfileSummaries', [])
+            
+            if not profiles:
+                self.logger.warning(f"⚠️ No inference profiles found in region {self.region}")
+                return None
+            
+            self.logger.info(f"✅ Found {len(profiles)} inference profile(s)")
+            
+            # Look for profiles that contain the target model
+            matching_profiles = []
+            
+            for profile in profiles:
+                profile_arn = profile.get('inferenceProfileArn', '')
+                profile_name = profile.get('inferenceProfileName', '')
+                status = profile.get('status', '')
+                
+                if status != 'ACTIVE':
+                    continue
+                
+                try:
+                    # Get detailed information about the profile
+                    detail_response = temp_client.get_inference_profile(inferenceProfileIdentifier=profile_arn)
+                    detail = detail_response.get('inferenceProfile', {})
+                    foundation_models = detail.get('foundationModelArns', [])
+                    
+                    # Check if this profile contains the target model
+                    for model_arn in foundation_models:
+                        # Extract model ID from ARN
+                        model_id_from_arn = model_arn.split('/')[-1] if '/' in model_arn else model_arn
+                        
+                        # Check for exact match or similar model
+                        if (model_id_from_arn == model_id or 
+                            self._is_model_compatible(model_id, model_id_from_arn)):
+                            matching_profiles.append({
+                                'arn': profile_arn,
+                                'name': profile_name,
+                                'status': status,
+                                'models': foundation_models
+                            })
+                            self.logger.info(f"✅ Found compatible profile: {profile_name}")
+                            break
+                
+                except Exception as e:
+                    self.logger.debug(f"Could not get details for profile {profile_name}: {e}")
+                    continue
+            
+            if not matching_profiles:
+                self.logger.warning(f"⚠️ No inference profiles found that contain model {model_id} in {self.region}")
+                
+                # Try other regions if not found in primary region
+                if self.region != "us-east-1":
+                    self.logger.info(f"🔍 Trying other regions for inference profiles...")
+                    return self._search_inference_profiles_multiple_regions(model_id)
+                
+                return None
+            
+            # Select the best profile (prefer profiles with fewer models, or the first one)
+            best_profile = min(matching_profiles, key=lambda p: len(p['models']))
+            
+            self.logger.info(f"🎯 Selected inference profile: {best_profile['name']}")
+            self.logger.info(f"   🔗 ARN: {best_profile['arn']}")
+            self.logger.info(f"   📊 Contains {len(best_profile['models'])} model(s)")
+            
+            return best_profile['arn']
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'AccessDeniedException':
+                self.logger.warning(f"⚠️ Access denied when listing inference profiles")
+                self.logger.warning(f"   Check IAM permissions for bedrock:ListInferenceProfiles")
+            else:
+                self.logger.warning(f"⚠️ Error discovering inference profiles: {error_code}")
+            return None
+        except Exception as e:
+            self.logger.warning(f"⚠️ Could not auto-discover inference profile: {e}")
+            return None
+    
+    def _is_model_compatible(self, target_model: str, profile_model: str) -> bool:
+        """
+        Check if a profile model is compatible with the target model.
+        
+        Args:
+            target_model: The model we're looking for
+            profile_model: The model in the inference profile
+            
+        Returns:
+            True if compatible, False otherwise
+        """
+        # Exact match
+        if target_model == profile_model:
+            return True
+        
+        # Check for similar models (same base model, different versions)
+        target_base = target_model.replace(':0', '').replace('us.', '').replace('eu.', '').replace('ap.', '')
+        profile_base = profile_model.replace(':0', '').replace('us.', '').replace('eu.', '').replace('ap.', '')
+        
+        # For Haiku models, check if it's the same base model
+        if 'claude-3-5-haiku' in target_base and 'claude-3-5-haiku' in profile_base:
+            return True
+        
+        # For other Claude models, check if it's the same family
+        if 'claude' in target_base and 'claude' in profile_base:
+            # Extract the main model name (e.g., 'claude-3-5-sonnet' from 'claude-3-5-sonnet-20241022-v1')
+            target_family = target_base.split('-2024')[0].split('-2023')[0] if '-' in target_base else target_base
+            profile_family = profile_base.split('-2024')[0].split('-2023')[0] if '-' in profile_base else profile_base
+            
+            return target_family == profile_family
+        
+        return False
+    
+    def _search_inference_profiles_multiple_regions(self, model_id: str) -> Optional[str]:
+        """
+        Search for inference profiles across multiple regions.
+        
+        Args:
+            model_id: The model ID that requires an inference profile
+            
+        Returns:
+            The inference profile ARN if found, None otherwise
+        """
+        # Common regions to search
+        regions_to_try = ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+        
+        # Remove the current region from the list
+        if self.region in regions_to_try:
+            regions_to_try.remove(self.region)
+        
+        for region in regions_to_try:
+            try:
+                self.logger.info(f"🔍 Searching in region: {region}")
+                
+                import boto3
+                temp_client = boto3.client('bedrock', region_name=region)
+                
+                # List inference profiles in this region
+                response = temp_client.list_inference_profiles()
+                profiles = response.get('inferenceProfileSummaries', [])
+                
+                if not profiles:
+                    continue
+                
+                # Look for profiles that contain the target model
+                for profile in profiles:
+                    profile_arn = profile.get('inferenceProfileArn', '')
+                    profile_name = profile.get('inferenceProfileName', '')
+                    status = profile.get('status', '')
+                    
+                    if status != 'ACTIVE':
+                        continue
+                    
+                    try:
+                        # Get detailed information about the profile
+                        detail_response = temp_client.get_inference_profile(inferenceProfileIdentifier=profile_arn)
+                        detail = detail_response.get('inferenceProfile', {})
+                        foundation_models = detail.get('foundationModelArns', [])
+                        
+                        # Check if this profile contains the target model
+                        for model_arn in foundation_models:
+                            model_id_from_arn = model_arn.split('/')[-1] if '/' in model_arn else model_arn
+                            
+                            if (model_id_from_arn == model_id or 
+                                self._is_model_compatible(model_id, model_id_from_arn)):
+                                
+                                self.logger.info(f"✅ Found inference profile in {region}: {profile_name}")
+                                self.logger.info(f"   🔗 ARN: {profile_arn}")
+                                return profile_arn
+                    
+                    except Exception as e:
+                        self.logger.debug(f"Could not get details for profile {profile_name} in {region}: {e}")
+                        continue
+                        
+            except Exception as e:
+                self.logger.debug(f"Could not search region {region}: {e}")
+                continue
+        
+        self.logger.warning(f"⚠️ No inference profiles found for model {model_id} in any region")
+        return None
+    
+    def _log_available_models_suggestion(self):
+        """Log available models to help users choose alternatives."""
+        try:
+            import boto3
+            from botocore.exceptions import ClientError
+            
+            # Create a temporary client for checking model availability
+            temp_client = boto3.client('bedrock', region_name=self.region)
+            
+            # List foundation models
+            response = temp_client.list_foundation_models()
+            available_models = [model['modelId'] for model in response['modelSummaries']]
+            
+            # Find some good alternatives
+            suggested_models = []
+            
+            # Look for Claude models that support on-demand
+            claude_models = [m for m in available_models if 'claude' in m.lower() and 'haiku' not in m.lower()]
+            if claude_models:
+                suggested_models.extend(claude_models[:2])  # Take first 2
+            
+            # Look for other good models
+            other_models = [m for m in available_models if 'amazon.titan' in m or 'meta.llama' in m]
+            if other_models:
+                suggested_models.extend(other_models[:2])  # Take first 2
+            
+            if suggested_models:
+                self.logger.info(f"💡 Available models in {self.region} that support on-demand access:")
+                for model in suggested_models[:3]:  # Show up to 3 models
+                    self.logger.info(f"   • {model}")
+                self.logger.info(f"   💡 You can use any of these models instead")
+            else:
+                self.logger.warning(f"⚠️ No obvious alternative models found in {self.region}")
+                self.logger.warning(f"   Consider checking other regions or creating inference profiles")
+                
+        except Exception as e:
+            self.logger.debug(f"Could not list available models: {e}")
     
     def _check_model_availability(self, model_id: str) -> bool:
         """
