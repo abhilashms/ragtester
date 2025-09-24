@@ -48,19 +48,46 @@ class MistralChat(LLMProvider):
     def _validate_model(self) -> None:
         """Validate the model name format."""
         valid_models = [
+            # Mistral Large Series (Latest)
             "mistral-large-latest",
-            "mistral-medium-latest", 
+            "mistral-large-2402",
+            
+            # Mistral Medium Series
+            "mistral-medium-latest",
+            "mistral-medium-2312",
+            
+            # Mistral Small Series
             "mistral-small-latest",
+            "mistral-small-2402",
+            
+            # Mistral 7B Series
             "mistral-7b-instruct",
+            "mistral-7b-instruct-v0.1",
+            "mistral-7b-instruct-v0.2",
+            "mistral-7b-instruct-v0.3",
+            
+            # Mixtral Series (Mixture of Experts)
             "mistral-8x7b-instruct",
+            "mistral-8x7b-instruct-v0.1",
             "mistral-8x22b-instruct",
+            "mistral-8x22b-instruct-v0.1",
+            
+            # Codestral Series (Code Generation)
             "codestral-latest",
+            "codestral-22b-2405",
+            "codestral-7b-2405",
+            
+            # Pixtral Series (Multimodal)
+            "pixtral-latest",
             "pixtral-12b-2409",
-            "pixtral-latest"
+            
+            # Future Models (when available)
+            "mistral-nemo-latest",
+            "mistral-nemo-12b-2409",
         ]
         
         if self.model not in valid_models:
-            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models}")
+            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models[:10]}...")
 
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """

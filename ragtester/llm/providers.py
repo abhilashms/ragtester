@@ -151,6 +151,62 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
             
             provider = BedrockLLM(**bedrock_kwargs)
             logger.debug("[OK] Bedrock provider initialized successfully")
+        elif name == "deepseek":
+            logger.debug("Importing DeepSeek provider...")
+            from .providers_deepseek import DeepSeekLLM
+            # DeepSeek expects: model, api_key, and other kwargs (no base_url)
+            deepseek_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered DeepSeek kwargs: {deepseek_kwargs}")
+            provider = DeepSeekLLM(**deepseek_kwargs)
+            logger.debug("[OK] DeepSeek provider initialized successfully")
+        elif name == "reka":
+            logger.debug("Importing Reka provider...")
+            from .providers_reka import RekaLLM
+            # Reka expects: model, api_key, and other kwargs (no base_url)
+            reka_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Reka kwargs: {reka_kwargs}")
+            provider = RekaLLM(**reka_kwargs)
+            logger.debug("[OK] Reka provider initialized successfully")
+        elif name == "qwen":
+            logger.debug("Importing Qwen provider...")
+            from .providers_qwen import QwenLLM
+            # Qwen expects: model, api_key, and other kwargs (no base_url)
+            qwen_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Qwen kwargs: {qwen_kwargs}")
+            provider = QwenLLM(**qwen_kwargs)
+            logger.debug("[OK] Qwen provider initialized successfully")
+        elif name == "moonshot":
+            logger.debug("Importing Moonshot provider...")
+            from .providers_moonshot import MoonshotLLM
+            # Moonshot expects: model, api_key, and other kwargs (no base_url)
+            moonshot_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Moonshot kwargs: {moonshot_kwargs}")
+            provider = MoonshotLLM(**moonshot_kwargs)
+            logger.debug("[OK] Moonshot provider initialized successfully")
+        elif name == "zhipu":
+            logger.debug("Importing Zhipu provider...")
+            from .providers_zhipu import ZhipuLLM
+            # Zhipu expects: model, api_key, and other kwargs (no base_url)
+            zhipu_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Zhipu kwargs: {zhipu_kwargs}")
+            provider = ZhipuLLM(**zhipu_kwargs)
+            logger.debug("[OK] Zhipu provider initialized successfully")
+        elif name == "baidu":
+            logger.debug("Importing Baidu ERNIE provider...")
+            from .providers_baidu import BaiduLLM
+            # Baidu expects: model, api_key, and other kwargs (no base_url)
+            baidu_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered Baidu kwargs: {baidu_kwargs}")
+            provider = BaiduLLM(**baidu_kwargs)
+            logger.debug("[OK] Baidu ERNIE provider initialized successfully")
+        elif name == "zeroone" or name == "01ai":
+            logger.debug("Importing 01.AI provider...")
+            from .providers_01ai import ZeroOneAILLM
+            # 01.AI expects: model, api_key, and other kwargs (no base_url)
+            zeroone_kwargs = {k: v for k, v in kwargs.items() if k != 'base_url'}
+            logger.debug(f"Filtered 01.AI kwargs: {zeroone_kwargs}")
+            provider = ZeroOneAILLM(**zeroone_kwargs)
+            logger.debug("[OK] 01.AI provider initialized successfully")
         else:
             logger.error(f"[ERROR] Unknown provider: {name}")
             raise ValueError(f"Unknown provider: {name}")
@@ -168,19 +224,31 @@ def build_llm(provider_name: str, **kwargs: Any) -> LLMProvider:
         
         provider = DummyLLM()
         return LoggingLLMWrapper(provider, "dummy", model_name)
+    except ValueError as e:
+        logger.error(f"[ERROR] Configuration error for {name} provider: {e}")
+        logger.error(f"Please check your API key and configuration.")
+        logger.warning(f"Falling back to dummy provider due to configuration error.")
+        
+        provider = DummyLLM()
+        return LoggingLLMWrapper(provider, "dummy", model_name)
     except Exception as e:
         logger.error(f"[ERROR] Failed to initialize {name} provider: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Error details: {str(e)}")
         logger.warning(f"Falling back to dummy provider. Check your configuration and dependencies.")
         
-        # Log additional debugging info
+        # Log additional debugging info for specific providers
         if name == "bedrock":
             logger.error("[DEBUG] Bedrock-specific debugging info:")
             logger.error(f"  - Model: {model_name}")
             logger.error(f"  - Region: {kwargs.get('region', 'us-east-1')}")
             logger.error(f"  - All kwargs: {kwargs}")
             logger.error("  - Check: AWS credentials, boto3 installation, IAM permissions")
+        elif name in ["openai", "anthropic", "gemini", "mistral", "cohere"]:
+            logger.error(f"[DEBUG] {name.title()}-specific debugging info:")
+            logger.error(f"  - Model: {model_name}")
+            logger.error(f"  - API Key: {'Set' if kwargs.get('api_key') else 'Missing'}")
+            logger.error(f"  - Check: API key validity, model availability, rate limits")
         
         provider = DummyLLM()
         return LoggingLLMWrapper(provider, "dummy", model_name)

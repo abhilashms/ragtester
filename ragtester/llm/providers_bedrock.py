@@ -6,6 +6,7 @@ from typing import Any, Dict, Sequence
 
 from .base import LLMProvider
 from ..types import LLMMessage
+from .api_utils import retry_with_backoff, validate_model_name, validate_messages_format
 
 
 class BedrockLLM(LLMProvider):
@@ -18,7 +19,7 @@ class BedrockLLM(LLMProvider):
         Initialize Bedrock LLM provider.
         
         Args:
-            model: Bedrock model ID (e.g., 'us.anthropic.claude-3-5-haiku-20241022-v1:0')
+            model: Bedrock model ID (e.g., 'anthropic.claude-sonnet-4-20250514-v1:0')
             region: AWS region (defaults to us-east-1)
             **kwargs: Additional parameters
         """
@@ -26,7 +27,7 @@ class BedrockLLM(LLMProvider):
         from ..logging_utils import get_logger
         self.logger = get_logger()
         
-        self.model_id = model or "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+        self.model_id = model or "anthropic.claude-3-5-sonnet-20241022-v1:0"
         self.region = region or "us-east-1"
         
         # Store chat parameters separately from client parameters
@@ -47,6 +48,9 @@ class BedrockLLM(LLMProvider):
         self.logger.debug(f"  - Region: {self.region}")
         self.logger.debug(f"  - Chat params: {self.chat_params}")
         self.logger.debug(f"  - Client kwargs: {self.client_kwargs}")
+        
+        # Validate model name
+        self._validate_model()
         
         self._initialize_client()
     
@@ -123,6 +127,82 @@ class BedrockLLM(LLMProvider):
         
         self.logger.debug("✅ Bedrock client initialization completed successfully")
     
+    def _validate_model(self) -> None:
+        """Validate the model name format."""
+        valid_models = [
+            # Anthropic Claude Models
+            "anthropic.claude-3-5-sonnet-20241022-v1:0",
+            "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "anthropic.claude-3-5-opus-20241022-v1:0",
+            "anthropic.claude-3-opus-20240229-v1:0",
+            "anthropic.claude-3-sonnet-20240229-v1:0",
+            "anthropic.claude-3-haiku-20240307-v1:0",
+            "anthropic.claude-2.1-v1:0",
+            "anthropic.claude-2.0-v1:0",
+            "anthropic.claude-instant-1.2-v1:0",
+            
+            # Amazon Titan Models
+            "amazon.titan-text-express-v1",
+            "amazon.titan-text-lite-v1",
+            "amazon.titan-text-agile-v1",
+            "amazon.titan-embed-text-v1",
+            "amazon.titan-embed-text-v2",
+            "amazon.titan-image-generator-v1",
+            "amazon.titan-multimodal-embedding-v1",
+            
+            # Cohere Models
+            "cohere.command-text-v14",
+            "cohere.command-light-text-v14",
+            "cohere.command-r-plus-v1:0",
+            "cohere.command-r-v1:0",
+            "cohere.embed-english-v3",
+            "cohere.embed-multilingual-v3",
+            
+            # AI21 Labs Models
+            "ai21.j2-ultra-v1",
+            "ai21.j2-mid-v1",
+            "ai21.j2-light-v1",
+            "ai21.j2-ultra-v1",
+            "ai21.j2-mid-v1",
+            "ai21.j2-light-v1",
+            
+            # Meta Llama Models
+            "meta.llama3-8b-instruct-v1:0",
+            "meta.llama3-70b-instruct-v1:0",
+            "meta.llama3-405b-instruct-v1:0",
+            "meta.llama3.1-8b-instruct-v1:0",
+            "meta.llama3.1-70b-instruct-v1:0",
+            "meta.llama3.1-405b-instruct-v1:0",
+            "meta.llama3.1-8b-instruct-v1:0",
+            "meta.llama3.1-70b-instruct-v1:0",
+            "meta.llama3.1-405b-instruct-v1:0",
+            
+            # Mistral Models
+            "mistral.mistral-7b-instruct-v0:2",
+            "mistral.mixtral-8x7b-instruct-v0:1",
+            "mistral.mixtral-8x22b-instruct-v0:1",
+            "mistral.mistral-large-2402-v1:0",
+            "mistral.mistral-nemo-12b-instruct-v0:1",
+            
+            # Stability AI Models
+            "stability.stable-diffusion-xl-v1",
+            "stability.stable-diffusion-xl-v0",
+            "stability.stable-image-remove-background-v1:0",
+            "stability.stable-image-style-guide-v1:0",
+            "stability.stable-image-control-sketch-v1:0",
+            "stability.stable-image-erase-object-v1:0",
+            
+            # NVIDIA Models
+            "nvidia.nemotron-3-8b-instruct-v1-qwq",
+            "nvidia.nemotron-3-8b-instruct-v1-qwen",
+            
+            # Custom Models (if available)
+            "custom.model-name-v1:0",
+        ]
+        
+        validate_model_name(self.model_id, valid_models, "AWS Bedrock")
+    
+    @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """
         Generate a response using Bedrock model.
@@ -135,6 +215,9 @@ class BedrockLLM(LLMProvider):
             Generated response text
         """
         self.logger.debug(f"💬 Bedrock chat called with {len(messages)} messages")
+        
+        # Validate messages format
+        validate_messages_format(list(messages), "AWS Bedrock")
         self.logger.debug(f"Messages: {messages}")
         self.logger.debug(f"Chat kwargs: {kwargs}")
         

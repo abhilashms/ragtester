@@ -86,6 +86,14 @@ pip install ragtester[huggingface]   # Hugging Face Inference API support
 pip install ragtester[fireworks]     # Fireworks AI API support
 pip install ragtester[together]      # Together AI API support
 pip install ragtester[perplexity]    # Perplexity AI API support
+pip install ragtester[deepseek]      # DeepSeek API support
+pip install ragtester[reka]          # Reka AI API support
+pip install ragtester[qwen]          # Qwen (Alibaba) API support
+pip install ragtester[moonshot]      # Moonshot AI API support
+pip install ragtester[zhipu]         # Zhipu AI API support
+pip install ragtester[baidu]         # Baidu ERNIE API support
+pip install ragtester[zeroone]       # 01.AI API support
+pip install ragtester[ollama]        # Ollama local models
 pip install ragtester[local-transformers]  # Local transformers models
 
 # Local Model
@@ -391,11 +399,18 @@ os.environ["HF_TOKEN"] = "your-key"
 os.environ["FIREWORKS_API_KEY"] = "your-key"
 os.environ["TOGETHER_API_KEY"] = "your-key"
 os.environ["PERPLEXITY_API_KEY"] = "your-key"
+os.environ["DEEPSEEK_API_KEY"] = "your-key"
+os.environ["REKA_API_KEY"] = "your-key"
+os.environ["QWEN_API_KEY"] = "your-key"
+os.environ["MOONSHOT_API_KEY"] = "your-key"
+os.environ["ZHIPU_API_KEY"] = "your-key"
+os.environ["BAIDU_API_KEY"] = "your-key"
+os.environ["ZEROONE_API_KEY"] = "your-key"
 
 # Or pass directly
 config = RAGTestConfig(
     llm=LLMConfig(
-        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity"
+        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity", "deepseek", "reka", "qwen", "moonshot", "zhipu", "baidu", "zeroone"
         api_key="your-key"
     )
 )

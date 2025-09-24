@@ -74,7 +74,7 @@ Alternative LLM Providers:
    config = RAGTestConfig(
        llm=LLMConfig(
            provider="bedrock",
-           model="us.anthropic.claude-3-5-haiku-20241022-v1:0",
+           model="anthropic.claude-sonnet-4-20250514-v1:0",
            extra={"region": "us-east-1"}
        )
    )

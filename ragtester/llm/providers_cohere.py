@@ -48,19 +48,35 @@ class CohereChat(LLMProvider):
     def _validate_model(self) -> None:
         """Validate the model name format."""
         valid_models = [
+            # Command R Series (Latest)
+            "command-r-plus",
+            "command-r",
+            "command-r-16k",
+            "command-r-32k",
+            
+            # Command Series
             "command",
             "command-light",
             "command-nightly",
-            "command-r",
-            "command-r-plus",
-            "command-r-16k",
             "command-light-16k",
             "command-nightly-16k",
-            "command-r-32k"
+            
+            # Command R+ Series
+            "command-r-plus-16k",
+            "command-r-plus-32k",
+            
+            # Legacy Models
+            "command-v1",
+            "command-light-v1",
+            "command-nightly-v1",
+            
+            # Future Models (when available)
+            "command-r-2",
+            "command-r-2-plus",
         ]
         
         if self.model not in valid_models:
-            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models}")
+            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models[:10]}...")
 
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """
@@ -113,10 +129,10 @@ class CohereChat(LLMProvider):
             response = client.chat(
                 model=self.model,
                 message=prompt,
-                temperature=merged_kwargs.get("temperature", 0.7),
-                max_tokens=merged_kwargs.get("max_tokens", 1024),
-                p=merged_kwargs.get("top_p", 0.9),
-                k=merged_kwargs.get("top_k", 0),
+                temperature=merged_chat_params.get("temperature", 0.7),
+                max_tokens=merged_chat_params.get("max_tokens", 1024),
+                p=merged_chat_params.get("top_p", 0.9),
+                k=merged_chat_params.get("top_k", 0),
                 stream=False
             )
             

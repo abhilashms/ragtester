@@ -50,9 +50,19 @@ class GrokChat(LLMProvider):
     def _validate_model(self) -> None:
         """Validate the model name format."""
         valid_models = [
-            "grok-beta",
+            # Grok-2 Series (Latest)
             "grok-2",
-            "grok-2-1212",  # Latest Grok-2 model
+            "grok-2-1212",
+            "grok-2-1212-beta",
+            
+            # Grok-1 Series
+            "grok-beta",
+            "grok-1",
+            "grok-1-beta",
+            
+            # Future models (when available)
+            "grok-3",
+            "grok-3-beta",
         ]
         
         if self.model not in valid_models:

@@ -5,6 +5,7 @@ from typing import Any, Sequence
 
 from .base import LLMProvider
 from ..types import LLMMessage
+from .api_utils import retry_with_backoff, validate_api_key, validate_model_name, handle_api_response, validate_messages_format
 
 
 class GeminiChat(LLMProvider):
@@ -23,7 +24,7 @@ class GeminiChat(LLMProvider):
             **kwargs: Additional parameters
         """
         self.model = model
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        self.api_key = validate_api_key(api_key or os.getenv("GOOGLE_API_KEY"), "Google")
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -36,11 +37,7 @@ class GeminiChat(LLMProvider):
         self.client_kwargs = {k: v for k, v in kwargs.items() 
                              if k not in ['temperature', 'max_tokens', 'top_p']}
         
-        if not self.api_key:
-            raise ValueError(
-                "Google AI API key is required. Set GOOGLE_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
+        # API key validation is handled by validate_api_key
         
         # Validate model name
         self._validate_model()
@@ -51,17 +48,38 @@ class GeminiChat(LLMProvider):
     def _validate_model(self) -> None:
         """Validate the model name format."""
         valid_models = [
+            # Gemini 2.0 Series (Latest)
+            "gemini-2.0-flash-exp",
+            "gemini-2.0-flash-thinking-exp",
+            
+            # Gemini 1.5 Series
             "gemini-1.5-flash",
             "gemini-1.5-flash-8b",
             "gemini-1.5-pro",
             "gemini-1.5-pro-latest",
-            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro-001",
+            "gemini-1.5-flash-001",
+            
+            # Gemini 1.0 Series
             "gemini-pro",
-            "gemini-pro-vision"
+            "gemini-pro-vision",
+            "gemini-pro-001",
+            "gemini-pro-vision-001",
+            
+            # Gemini Ultra Series
+            "gemini-ultra",
+            "gemini-ultra-vision",
+            
+            # Experimental Models
+            "gemini-experimental",
+            "gemini-experimental-vision",
+            
+            # Future Models (when available)
+            "gemini-3.0-flash",
+            "gemini-3.0-pro",
         ]
         
-        if self.model not in valid_models:
-            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models}")
+        validate_model_name(self.model, valid_models, "Google Gemini")
     
     def _initialize_client(self) -> None:
         """Initialize the Google AI client."""
@@ -79,6 +97,7 @@ class GeminiChat(LLMProvider):
         self._genai = genai
         self._client = genai.GenerativeModel(self.model, **self.client_kwargs)
 
+    @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """
         Generate a response using Gemini model.
@@ -92,6 +111,9 @@ class GeminiChat(LLMProvider):
         """
         if not hasattr(self, '_client'):
             self._initialize_client()
+        
+        # Validate messages format
+        validate_messages_format(list(messages), "Google Gemini")
         
         # Merge chat parameters with any additional kwargs from the call
         merged_chat_params = {**self.chat_params, **kwargs}
@@ -147,11 +169,7 @@ class GeminiChat(LLMProvider):
                     generation_config=generation_config
                 )
             
-            # Extract the response text
-            if response and response.text:
-                return response.text
-            else:
-                return ""
+            return handle_api_response(response, "Google Gemini")
                 
         except Exception as e:
             raise RuntimeError(f"Gemini API call failed: {e}")
