@@ -40,9 +40,9 @@ class AnthropicChat(LLMProvider):
         # API key validation is handled by validate_api_key
         
         # Validate model name
-        self._validate_model()
+        self.model = self._validate_model()
     
-    def _validate_model(self) -> None:
+    def _validate_model(self) -> str:
         """Validate the model name format."""
         valid_models = [
             # Claude 3.5 Series (Latest)
@@ -89,7 +89,7 @@ class AnthropicChat(LLMProvider):
             "anthropic.claude-instant-1.2-v1:0",
         ]
         
-        validate_model_name(self.model, valid_models, "Anthropic")
+        return validate_model_name(self.model, valid_models, "Anthropic")
 
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:

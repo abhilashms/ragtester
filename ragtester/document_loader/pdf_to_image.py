@@ -18,10 +18,7 @@ def pdf_page_to_image(pdf_path: str, page_number: int, dpi: int = 200) -> Option
     Returns:
         Image data as bytes (PNG format) or None if conversion fails
     """
-    try:
-        import fitz  # PyMuPDF
-    except ImportError:
-        raise ImportError("PyMuPDF is required for PDF to image conversion. Install with: pip install PyMuPDF")
+    import fitz  # PyMuPDF - now included as default dependency
     
     try:
         # Open the PDF document

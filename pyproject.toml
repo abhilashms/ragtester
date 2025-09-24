@@ -28,8 +28,10 @@ classifiers = [
 
 dependencies = [
     "PyPDF2>=3.0.0",
+    "PyMuPDF>=1.23.0",
     "python-docx>=0.8.11",
     "requests>=2.28.0",
+    "Pillow>=9.0.0",
 ]
 
 [project.urls]

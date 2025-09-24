@@ -15,7 +15,7 @@ class OpenAIChat(LLMProvider):
         self.base_url = base_url
         
         # Validate model name
-        self._validate_model()
+        self.model = self._validate_model()
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -33,7 +33,7 @@ class OpenAIChat(LLMProvider):
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
     
-    def _validate_model(self) -> None:
+    def _validate_model(self) -> str:
         """Validate the model name format."""
         valid_models = [
             # GPT-4o Series (Latest)
@@ -94,7 +94,7 @@ class OpenAIChat(LLMProvider):
             "gpt-3.5-turbo-custom",
         ]
         
-        validate_model_name(self.model, valid_models, "OpenAI")
+        return validate_model_name(self.model, valid_models, "OpenAI")
 
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:

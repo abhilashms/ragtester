@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, Optional
 
 from .base import LLMProvider
 from ..types import LLMMessage
@@ -49,8 +49,8 @@ class BedrockLLM(LLMProvider):
         self.logger.debug(f"  - Chat params: {self.chat_params}")
         self.logger.debug(f"  - Client kwargs: {self.client_kwargs}")
         
-        # Validate model name
-        self._validate_model()
+        # Validate and normalize model name
+        self.model_id = self._validate_model()
         
         self._initialize_client()
     
@@ -127,8 +127,8 @@ class BedrockLLM(LLMProvider):
         
         self.logger.debug("✅ Bedrock client initialization completed successfully")
     
-    def _validate_model(self) -> None:
-        """Validate the model name format."""
+    def _validate_model(self) -> str:
+        """Validate and normalize the model name format."""
         valid_models = [
             # Anthropic Claude Models
             "anthropic.claude-3-5-sonnet-20241022-v1:0",
@@ -140,6 +140,7 @@ class BedrockLLM(LLMProvider):
             "anthropic.claude-2.1-v1:0",
             "anthropic.claude-2.0-v1:0",
             "anthropic.claude-instant-1.2-v1:0",
+            "anthropic.claude-sonnet-4-20250514-v1:0",  # Add the available model
             
             # Amazon Titan Models
             "amazon.titan-text-express-v1",
@@ -200,7 +201,7 @@ class BedrockLLM(LLMProvider):
             "custom.model-name-v1:0",
         ]
         
-        validate_model_name(self.model_id, valid_models, "AWS Bedrock")
+        return validate_model_name(self.model_id, valid_models, "AWS Bedrock")
     
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
@@ -272,10 +273,28 @@ class BedrockLLM(LLMProvider):
             return response_text
                 
         except Exception as e:
-            self.logger.error(f"❌ Bedrock API call failed: {e}")
+            error_msg = str(e)
+            self.logger.error(f"❌ Bedrock API call failed: {error_msg}")
             self.logger.error(f"Error type: {type(e).__name__}")
             self.logger.error(f"Model ID: {self.model_id}")
             self.logger.error(f"Region: {self.region}")
+            
+            # Provide specific guidance for common errors
+            if "on-demand throughput isn't supported" in error_msg:
+                self.logger.error("💡 Solution: This model requires an inference profile.")
+                self.logger.error("   Option 1: Use a different model that supports on-demand access")
+                self.logger.error("   Option 2: Create an inference profile in AWS Bedrock console")
+                self.logger.error("   Option 3: Use these models that support on-demand access:")
+                self.logger.error("     - anthropic.claude-sonnet-4-20250514-v1:0 (Available in your region)")
+                self.logger.error("     - anthropic.claude-3-5-sonnet-20241022-v1:0")
+                self.logger.error("     - amazon.titan-text-express-v1")
+                self.logger.error("     - meta.llama3-8b-instruct-v1:0")
+                
+                # Suggest the available model from the error logs
+                suggested_model = self._get_suggested_alternative_model()
+                if suggested_model:
+                    self.logger.error(f"   💡 Recommended: Use '{suggested_model}' (available in your region)")
+            
             raise RuntimeError(f"Bedrock API call failed: {e}")
     
     def _format_messages(self, messages: Sequence[LLMMessage]) -> list:
@@ -318,6 +337,17 @@ class BedrockLLM(LLMProvider):
             request_body["system"] = system_message
         
         return request_body
+    
+    def _get_suggested_alternative_model(self) -> Optional[str]:
+        """Get a suggested alternative model based on the current model and available models."""
+        # Based on the error logs, we know this model is available
+        if "claude" in self.model_id.lower():
+            return "anthropic.claude-sonnet-4-20250514-v1:0"
+        elif "titan" in self.model_id.lower():
+            return "amazon.titan-text-express-v1"
+        elif "llama" in self.model_id.lower():
+            return "meta.llama3-8b-instruct-v1:0"
+        return None
     
     def _create_generic_request(self, messages: list, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Create request body for non-Anthropic models."""

@@ -84,24 +84,61 @@ def validate_api_key(api_key: Optional[str], provider_name: str) -> str:
     return api_key.strip()
 
 
-def validate_model_name(model: str, valid_models: list, provider_name: str) -> None:
+def validate_model_name(model: str, valid_models: list, provider_name: str) -> str:
     """
-    Validate that a model name is in the list of valid models.
+    Validate and normalize model name for the provider.
     
     Args:
         model: The model name to validate
         valid_models: List of valid model names
         provider_name: Name of the provider for error messages
-    """
-    if model not in valid_models:
-        # Import logging utilities
-        from ..logging_utils import get_logger
-        logger = get_logger()
         
+    Returns:
+        The normalized model name
+    """
+    # Import logging utilities
+    from ..logging_utils import get_logger
+    logger = get_logger()
+    
+    # Normalize model name for AWS Bedrock
+    if provider_name == "AWS Bedrock":
+        normalized_model = _normalize_bedrock_model_name(model)
+        if normalized_model != model:
+            logger.info(f"🔧 Normalized Bedrock model name: '{model}' → '{normalized_model}'")
+            model = normalized_model
+    
+    if model not in valid_models:
         logger.warning(
             f"⚠️ Model '{model}' may not be available for {provider_name}. "
             f"Valid models: {valid_models[:5]}..."
         )
+    
+    return model
+
+
+def _normalize_bedrock_model_name(model: str) -> str:
+    """
+    Normalize AWS Bedrock model names by removing region prefixes.
+    
+    Args:
+        model: The model name to normalize
+        
+    Returns:
+        The normalized model name
+    """
+    # Remove common AWS region prefixes
+    region_prefixes = ['us.', 'eu.', 'ap.', 'ca.', 'sa.', 'af.', 'me.']
+    
+    for prefix in region_prefixes:
+        if model.startswith(prefix):
+            normalized = model[len(prefix):]
+            # Import logging utilities
+            from ..logging_utils import get_logger
+            logger = get_logger()
+            logger.debug(f"Removed region prefix '{prefix}' from model name: '{model}' → '{normalized}'")
+            return normalized
+    
+    return model
 
 
 def handle_api_response(response: Any, provider_name: str) -> str:

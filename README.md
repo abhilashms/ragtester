@@ -71,6 +71,11 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 pip install ragtester
 ```
 
+**Core dependencies included:**
+- **PDF processing** (PyMuPDF, PyPDF2, python-docx) - Essential for document processing
+- **Image processing** (Pillow) - Required for PDF to image conversion
+- **HTTP requests** support - For API-based LLM providers
+
 ### With Optional Dependencies
 
 ```bash
@@ -372,11 +377,12 @@ ragtester/
 
 ### Common Issues
 
+#### AWS Bedrock Model Access Issues
+
 #### CUDA/llama-cpp-python Issues
 ```bash
 # Install CPU-only version (recommended)
 pip install llama-cpp-python --force-reinstall --no-cache-dir
-
 ```
 
 #### Import Errors

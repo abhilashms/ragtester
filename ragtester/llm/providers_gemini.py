@@ -40,12 +40,12 @@ class GeminiChat(LLMProvider):
         # API key validation is handled by validate_api_key
         
         # Validate model name
-        self._validate_model()
+        self.model = self._validate_model()
         
         # Initialize the client
         self._initialize_client()
     
-    def _validate_model(self) -> None:
+    def _validate_model(self) -> str:
         """Validate the model name format."""
         valid_models = [
             # Gemini 2.0 Series (Latest)
@@ -79,7 +79,7 @@ class GeminiChat(LLMProvider):
             "gemini-3.0-pro",
         ]
         
-        validate_model_name(self.model, valid_models, "Google Gemini")
+        return validate_model_name(self.model, valid_models, "Google Gemini")
     
     def _initialize_client(self) -> None:
         """Initialize the Google AI client."""
