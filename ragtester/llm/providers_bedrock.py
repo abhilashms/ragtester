@@ -38,9 +38,12 @@ class BedrockLLM(LLMProvider):
         # Store chat parameters separately from client parameters
         self.chat_params = {
             'temperature': kwargs.get('temperature', 0.7),
-            'max_tokens': kwargs.get('max_tokens', 1024),
-            'top_p': kwargs.get('top_p', 1.0)
+            'max_tokens': kwargs.get('max_tokens', 1024)
         }
+        
+        # Only add top_p if explicitly provided (Haiku doesn't support it)
+        if 'top_p' in kwargs:
+            self.chat_params['top_p'] = kwargs['top_p']
         
         # Only pass AWS-specific parameters to client initialization
         self.client_kwargs = {k: v for k, v in kwargs.items() 
