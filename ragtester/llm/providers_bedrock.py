@@ -134,7 +134,17 @@ class BedrockLLM(LLMProvider):
             self.logger.info(f"  ⚙️ Client kwargs: {self.client_kwargs}")
             self.logger.info(f"  🔧 Service: bedrock-runtime")
             
-            self._client = boto3.client(
+            # Handle AWS profile configuration
+            aws_profile = os.getenv('AWS_PROFILE', 'default')
+            self.logger.info(f"  🔑 AWS Profile: {aws_profile}")
+            
+            if aws_profile == 'default' and not os.getenv('AWS_PROFILE'):
+                self.logger.info(f"  💡 Using default AWS profile (no AWS_PROFILE env var set)")
+                self.logger.info(f"  💡 To use a specific profile, set: export AWS_PROFILE=your-profile-name")
+            
+            # Create boto3 session with explicit profile
+            session = boto3.Session(profile_name=aws_profile)
+            self._client = session.client(
                 'bedrock-runtime',
                 region_name=self.region,
                 **self.client_kwargs
@@ -146,7 +156,7 @@ class BedrockLLM(LLMProvider):
             # Test the connection by listing available models
             self.logger.info("🔍 Testing Bedrock connection by listing available models...")
             try:
-                bedrock_client = boto3.client('bedrock', region_name=self.region)
+                bedrock_client = session.client('bedrock', region_name=self.region)
                 self.logger.debug("Created Bedrock list client")
                 
                 response = bedrock_client.list_foundation_models()
@@ -208,6 +218,12 @@ class BedrockLLM(LLMProvider):
                 self.logger.error("  - AWS CLI: aws configure")
                 self.logger.error("  - Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
                 self.logger.error("  - IAM roles (if running on EC2)")
+                self.logger.error("  - AWS Profile: export AWS_PROFILE=your-profile-name")
+                self.logger.error("")
+                self.logger.error("💡 TIP: If you have multiple AWS profiles, try:")
+                self.logger.error("   export AWS_PROFILE=default")
+                self.logger.error("   or")
+                self.logger.error("   export AWS_PROFILE=your-specific-profile")
                 raise RuntimeError("AWS credentials not found. Please configure AWS credentials.")
                 
         except ImportError as e:
@@ -780,7 +796,8 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            temp_client = boto3.client('bedrock', region_name=self.region)
+            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models to check availability
             response = temp_client.list_foundation_models()
@@ -869,7 +886,8 @@ class BedrockLLM(LLMProvider):
             self.logger.info(f"🔍 Searching for inference profiles in region {self.region}")
             
             # Create a temporary client for checking inference profiles
-            temp_client = boto3.client('bedrock', region_name=self.region)
+            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            temp_client = session.client('bedrock', region_name=self.region)
             
             # List inference profiles
             response = temp_client.list_inference_profiles()
@@ -1005,7 +1023,8 @@ class BedrockLLM(LLMProvider):
                 self.logger.info(f"🔍 Searching in region: {region}")
                 
                 import boto3
-                temp_client = boto3.client('bedrock', region_name=region)
+                session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+                temp_client = session.client('bedrock', region_name=region)
                 
                 # List inference profiles in this region
                 response = temp_client.list_inference_profiles()
@@ -1058,7 +1077,8 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            temp_client = boto3.client('bedrock', region_name=self.region)
+            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models
             response = temp_client.list_foundation_models()
@@ -1104,7 +1124,8 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            temp_client = boto3.client('bedrock', region_name=self.region)
+            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models to check availability
             response = temp_client.list_foundation_models()
