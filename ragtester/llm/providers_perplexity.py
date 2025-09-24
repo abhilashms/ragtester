@@ -102,6 +102,10 @@ class PerplexityChat(LLMProvider):
             payload["top_p"] = merged_kwargs["top_p"]
         if "top_k" in merged_kwargs:
             payload["top_k"] = merged_kwargs["top_k"]
+        if "frequency_penalty" in merged_kwargs:
+            payload["frequency_penalty"] = merged_kwargs["frequency_penalty"]
+        if "presence_penalty" in merged_kwargs:
+            payload["presence_penalty"] = merged_kwargs["presence_penalty"]
         if "stop" in merged_kwargs:
             payload["stop"] = merged_kwargs["stop"]
         

@@ -5,6 +5,12 @@ from typing import Any, Sequence
 
 from .base import LLMProvider
 from ..types import LLMMessage
+from .api_utils import (
+    retry_with_backoff, validate_messages_format,
+    handle_api_error, handle_rate_limit_response, test_api_connection,
+    AuthenticationError, RateLimitError, PermissionError, ServerError,
+    ConnectionError, TimeoutError
+)
 
 
 class HuggingFaceChat(LLMProvider):
@@ -56,6 +62,7 @@ class HuggingFaceChat(LLMProvider):
         if self.model not in popular_models:
             print(f"Info: Using custom model '{self.model}'. Popular models: {popular_models[:5]}...")
 
+    @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """
         Generate a response using Hugging Face Inference API.
@@ -136,9 +143,11 @@ class HuggingFaceChat(LLMProvider):
             return ""
                 
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Hugging Face API call failed: {e}")
+            # Use enhanced error handling
+            handle_api_error(e, "HuggingFace", f"Model: {self.model}")
         except Exception as e:
-            raise RuntimeError(f"Hugging Face API error: {e}")
+            # Use enhanced error handling
+            handle_api_error(e, "HuggingFace", f"Model: {self.model}")
     
     def _format_messages(self, messages: Sequence[LLMMessage]) -> str:
         """Convert message sequence to prompt format for Hugging Face models."""

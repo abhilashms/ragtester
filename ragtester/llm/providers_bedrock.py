@@ -6,7 +6,12 @@ from typing import Any, Dict, Sequence, Optional
 
 from .base import LLMProvider
 from ..types import LLMMessage
-from .api_utils import retry_with_backoff, validate_model_name, validate_messages_format
+from .api_utils import (
+    retry_with_backoff, validate_model_name, validate_messages_format,
+    handle_api_error, handle_rate_limit_response, test_api_connection,
+    AuthenticationError, RateLimitError, PermissionError, ServerError,
+    ConnectionError, TimeoutError
+)
 
 
 class BedrockLLM(LLMProvider):
@@ -295,7 +300,8 @@ class BedrockLLM(LLMProvider):
                 if suggested_model:
                     self.logger.error(f"   💡 Recommended: Use '{suggested_model}' (available in your region)")
             
-            raise RuntimeError(f"Bedrock API call failed: {e}")
+            # Use enhanced error handling
+            handle_api_error(e, "AWS Bedrock", f"Model: {self.model_id}, Region: {self.region}")
     
     def _format_messages(self, messages: Sequence[LLMMessage]) -> list:
         """Convert messages to format expected by Bedrock."""
@@ -332,16 +338,28 @@ class BedrockLLM(LLMProvider):
             else:
                 chat_messages.append(msg)
         
+        # Minimal request body for better compatibility
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": kwargs.get('max_tokens', 1024),
             "temperature": kwargs.get('temperature', 0.7),
-            "top_p": kwargs.get('top_p', 1.0),
             "messages": chat_messages
         }
         
+        # Only add top_p if explicitly provided (some models don't support it)
+        if 'top_p' in kwargs:
+            request_body["top_p"] = kwargs['top_p']
+        
+        # Handle system message based on model compatibility
         if system_message:
-            request_body["system"] = system_message
+            # Some models don't support the 'system' field, add as first message instead
+            if "haiku" in self.model_id.lower():
+                # For Haiku models, add system as first message
+                chat_messages.insert(0, {"role": "user", "content": f"System: {system_message}"})
+                request_body["messages"] = chat_messages
+            else:
+                # For other models, use the system field
+                request_body["system"] = system_message
         
         return request_body
     
