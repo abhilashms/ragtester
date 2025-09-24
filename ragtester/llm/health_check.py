@@ -167,7 +167,7 @@ class ProviderHealthChecker:
         # Add Bedrock if AWS credentials are available
         if os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("AWS_PROFILE"):
             configs["bedrock"] = {
-                "model": "anthropic.claude-3-5-sonnet-20241022-v1:0",
+                "model": "anthropic.claude-sonnet-4-20250514-v1:0",  # Use model that supports on-demand access
                 "region": "us-east-1"
             }
         

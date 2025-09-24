@@ -42,6 +42,24 @@ class BedrockLLM(LLMProvider):
         self.model_id = model or "us.anthropic.claude-3-5-haiku-20241022-v1:0"
         self.region = region or "us-east-1"
         
+        # Validate region format
+        if not self.region or not isinstance(self.region, str):
+            self.logger.warning(f"⚠️ Invalid region '{self.region}', defaulting to 'us-east-1'")
+            self.region = "us-east-1"
+        elif self.region.strip() == "":
+            self.logger.warning(f"⚠️ Empty region, defaulting to 'us-east-1'")
+            self.region = "us-east-1"
+        
+        # Common AWS regions for Bedrock
+        valid_regions = [
+            "us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1",
+            "ca-central-1", "eu-central-1", "eu-west-3", "ap-southeast-2", "ap-south-1"
+        ]
+        
+        if self.region not in valid_regions:
+            self.logger.warning(f"⚠️ Region '{self.region}' may not support Bedrock. Common regions: {valid_regions[:5]}")
+            self.logger.warning(f"   Using '{self.region}' anyway - availability varies by model")
+        
         self.logger.info(f"📤 Resolved parameters:")
         self.logger.info(f"  🤖 Model ID: {self.model_id}")
         self.logger.info(f"  📍 Region: {self.region}")
@@ -207,14 +225,33 @@ class BedrockLLM(LLMProvider):
         original_model_id = self.model_id
         self.logger.info(f"🔧 Original model ID: {original_model_id}")
         
-        # The validate_model_name function will handle normalization
-        # We'll let it normalize and then use the result
+        # Handle the :0 suffix issue - some models with :0 suffix require inference profiles
         normalized_model_id = original_model_id
+        
+        # Check if this is a model that requires inference profiles
+        if self._requires_inference_profile(normalized_model_id):
+            self.logger.warning(f"⚠️ Model {normalized_model_id} may require an inference profile")
+            self.logger.warning(f"   This model doesn't support on-demand throughput")
+            
+            # Try to suggest an alternative without :0 suffix
+            alternative_model = self._get_alternative_model(normalized_model_id)
+            if alternative_model:
+                self.logger.info(f"💡 SUGGESTED ALTERNATIVE: {alternative_model}")
+                self.logger.info(f"   This model supports on-demand throughput")
+                self.logger.info(f"   You can use this model instead or create an inference profile")
+                
+                # Ask user preference - for now, we'll use the alternative
+                self.logger.info(f"🔄 Auto-switching to alternative model: {alternative_model}")
+                normalized_model_id = alternative_model
+            else:
+                self.logger.error(f"❌ No alternative model found for {normalized_model_id}")
+                self.logger.error(f"   Please create an inference profile in AWS Bedrock console")
+                self.logger.error(f"   Or use a different model that supports on-demand access")
         
         valid_models = [
             # Anthropic Claude Models (without region prefix)
             "anthropic.claude-3-5-sonnet-20241022-v1:0",
-            "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "anthropic.claude-3-5-haiku-20241022-v1:0",  # Requires inference profile
             "anthropic.claude-3-5-opus-20241022-v1:0",
             "anthropic.claude-3-opus-20240229-v1:0",
             "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -222,11 +259,11 @@ class BedrockLLM(LLMProvider):
             "anthropic.claude-2.1-v1:0",
             "anthropic.claude-2.0-v1:0",
             "anthropic.claude-instant-1.2-v1:0",
-            "anthropic.claude-sonnet-4-20250514-v1:0",
+            "anthropic.claude-sonnet-4-20250514-v1:0",  # Supports on-demand access
             
-            # Anthropic Claude Models (with US region prefix)
+            # Anthropic Claude Models (with US region prefix) - These keep their prefix
             "us.anthropic.claude-3-5-sonnet-20241022-v1:0",
-            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",  # User's model - requires inference profile
             "us.anthropic.claude-3-5-opus-20241022-v1:0",
             "us.anthropic.claude-3-opus-20240229-v1:0",
             "us.anthropic.claude-3-sonnet-20240229-v1:0",
@@ -234,7 +271,31 @@ class BedrockLLM(LLMProvider):
             "us.anthropic.claude-2.1-v1:0",
             "us.anthropic.claude-2.0-v1:0",
             "us.anthropic.claude-instant-1.2-v1:0",
-            "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "us.anthropic.claude-sonnet-4-20250514-v1:0",  # Alternative that supports on-demand access
+            
+            # Anthropic Claude Models (with EU region prefix)
+            "eu.anthropic.claude-3-5-sonnet-20241022-v1:0",
+            "eu.anthropic.claude-3-5-haiku-20241022-v1:0",  # Requires inference profile
+            "eu.anthropic.claude-3-5-opus-20241022-v1:0",
+            "eu.anthropic.claude-3-opus-20240229-v1:0",
+            "eu.anthropic.claude-3-sonnet-20240229-v1:0",
+            "eu.anthropic.claude-3-haiku-20240307-v1:0",
+            "eu.anthropic.claude-2.1-v1:0",
+            "eu.anthropic.claude-2.0-v1:0",
+            "eu.anthropic.claude-instant-1.2-v1:0",
+            "eu.anthropic.claude-sonnet-4-20250514-v1:0",  # Alternative that supports on-demand access
+            
+            # Anthropic Claude Models (with AP region prefix)
+            "ap.anthropic.claude-3-5-sonnet-20241022-v1:0",
+            "ap.anthropic.claude-3-5-haiku-20241022-v1:0",  # Requires inference profile
+            "ap.anthropic.claude-3-5-opus-20241022-v1:0",
+            "ap.anthropic.claude-3-opus-20240229-v1:0",
+            "ap.anthropic.claude-3-sonnet-20240229-v1:0",
+            "ap.anthropic.claude-3-haiku-20240307-v1:0",
+            "ap.anthropic.claude-2.1-v1:0",
+            "ap.anthropic.claude-2.0-v1:0",
+            "ap.anthropic.claude-instant-1.2-v1:0",
+            "ap.anthropic.claude-sonnet-4-20250514-v1:0",  # Alternative that supports on-demand access
             
             # Amazon Titan Models
             "amazon.titan-text-express-v1",
@@ -445,6 +506,10 @@ class BedrockLLM(LLMProvider):
                 self.logger.error("   ❌ This model doesn't support direct on-demand invocation")
                 self.logger.error("   ❌ AWS Bedrock has different access models for different model variants")
                 
+                # Get the current model and suggest alternatives
+                current_model = self.model_id
+                alternative_model = self._get_alternative_model(current_model)
+                
                 self.logger.error("💡 SOLUTIONS:")
                 self.logger.error("   Option 1: Create an inference profile in AWS Bedrock console")
                 self.logger.error("   Option 2: Use a different model that supports on-demand access")
@@ -454,10 +519,16 @@ class BedrockLLM(LLMProvider):
                 self.logger.error("     ✅ amazon.titan-text-express-v1")
                 self.logger.error("     ✅ meta.llama3-8b-instruct-v1:0")
                 
-                self.logger.error("🔧 IMMEDIATE FIX:")
-                self.logger.error("   Option A: Create inference profile for this model in AWS console")
-                self.logger.error("   Option B: Change your model configuration to:")
-                self.logger.error("   model='anthropic.claude-sonnet-4-20250514-v1:0'")
+                if alternative_model:
+                    self.logger.error(f"🔧 IMMEDIATE FIX - AUTO-SUGGESTED ALTERNATIVE:")
+                    self.logger.error(f"   💡 Use '{alternative_model}' instead of '{current_model}'")
+                    self.logger.error(f"   ✅ This model supports on-demand access and preserves your region prefix")
+                    self.logger.error(f"   🔄 The system will automatically switch to this model on next run")
+                else:
+                    self.logger.error("🔧 IMMEDIATE FIX:")
+                    self.logger.error("   Option A: Create inference profile for this model in AWS console")
+                    self.logger.error("   Option B: Change your model configuration to:")
+                    self.logger.error("   model='anthropic.claude-sonnet-4-20250514-v1:0'")
                 
                 self.logger.error("📋 INFERENCE PROFILE SETUP:")
                 self.logger.error("   1. Go to AWS Bedrock console")
@@ -485,6 +556,52 @@ class BedrockLLM(LLMProvider):
                 self.logger.error("   1. Check if the model ID is correct")
                 self.logger.error("   2. Verify the model is available in your region")
                 self.logger.error("   3. Check request body format")
+                self.logger.error("   4. Ensure the model supports on-demand access")
+                
+                # Check for specific validation issues
+                if "model" in error_msg.lower() and "not found" in error_msg.lower():
+                    self.logger.error("🔍 MODEL NOT FOUND ISSUE:")
+                    self.logger.error("   ❌ The specified model is not available in your region")
+                    self.logger.error("   💡 Try using a different region or model")
+                    self.logger.error("   💡 Available models vary by region")
+                
+                elif "throughput" in error_msg.lower():
+                    self.logger.error("🔍 THROUGHPUT ISSUE:")
+                    self.logger.error("   ❌ Model throughput configuration issue")
+                    self.logger.error("   💡 This model may require inference profiles")
+                    self.logger.error("   💡 Or use a different model that supports on-demand access")
+            
+            elif "ThrottlingException" in error_msg or "throttling" in error_msg.lower():
+                self.logger.error("🚨 THROTTLING ERROR:")
+                self.logger.error("   ❌ Request rate exceeded for Bedrock")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Wait before retrying the request")
+                self.logger.error("   2. Reduce request frequency")
+                self.logger.error("   3. Consider using provisioned throughput for high-volume usage")
+            
+            elif "ModelNotReadyException" in error_msg:
+                self.logger.error("🚨 MODEL NOT READY ERROR:")
+                self.logger.error("   ❌ The model is currently not available")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Wait a few minutes and try again")
+                self.logger.error("   2. Check AWS service status")
+                self.logger.error("   3. Try a different model")
+            
+            elif "ModelTimeoutException" in error_msg:
+                self.logger.error("🚨 MODEL TIMEOUT ERROR:")
+                self.logger.error("   ❌ The model request timed out")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Reduce the input size")
+                self.logger.error("   2. Increase timeout settings")
+                self.logger.error("   3. Try a different model with faster response times")
+            
+            elif "ServiceQuotaExceededException" in error_msg:
+                self.logger.error("🚨 SERVICE QUOTA EXCEEDED:")
+                self.logger.error("   ❌ You've exceeded your service quota")
+                self.logger.error("💡 SOLUTIONS:")
+                self.logger.error("   1. Request a quota increase in AWS console")
+                self.logger.error("   2. Wait for quota reset period")
+                self.logger.error("   3. Use different models or regions")
             
             # Use enhanced error handling
             handle_api_error(e, "AWS Bedrock", f"Model: {self.model_id}, Region: {self.region}")
@@ -549,6 +666,28 @@ class BedrockLLM(LLMProvider):
         
         return request_body
     
+    def _requires_inference_profile(self, model_id: str) -> bool:
+        """Check if a model requires an inference profile for on-demand access."""
+        # Models that are known to require inference profiles
+        inference_profile_required = [
+            "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "eu.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "ap.anthropic.claude-3-5-haiku-20241022-v1:0",
+        ]
+        return model_id in inference_profile_required
+    
+    def _get_alternative_model(self, model_id: str) -> Optional[str]:
+        """Get an alternative model that supports on-demand access."""
+        # Mapping of models that require inference profiles to alternatives
+        alternatives = {
+            "anthropic.claude-3-5-haiku-20241022-v1:0": "anthropic.claude-sonnet-4-20250514-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "eu.anthropic.claude-3-5-haiku-20241022-v1:0": "eu.anthropic.claude-sonnet-4-20250514-v1:0",
+            "ap.anthropic.claude-3-5-haiku-20241022-v1:0": "ap.anthropic.claude-sonnet-4-20250514-v1:0",
+        }
+        return alternatives.get(model_id)
+    
     def _get_suggested_alternative_model(self) -> Optional[str]:
         """Get a suggested alternative model based on the current model and available models."""
         # Based on the error logs, we know this model is available
@@ -559,6 +698,42 @@ class BedrockLLM(LLMProvider):
         elif "llama" in self.model_id.lower():
             return "meta.llama3-8b-instruct-v1:0"
         return None
+    
+    def _check_model_availability(self, model_id: str) -> bool:
+        """
+        Check if a model is available in the current region.
+        
+        Args:
+            model_id: The model ID to check
+            
+        Returns:
+            True if model is available, False otherwise
+        """
+        try:
+            import boto3
+            from botocore.exceptions import ClientError
+            
+            # Create a temporary client for checking model availability
+            temp_client = boto3.client('bedrock', region_name=self.region)
+            
+            # List foundation models to check availability
+            response = temp_client.list_foundation_models()
+            available_models = [model['modelId'] for model in response['modelSummaries']]
+            
+            # Check if model is in the list
+            is_available = model_id in available_models
+            
+            if is_available:
+                self.logger.info(f"✅ Model {model_id} is available in region {self.region}")
+            else:
+                self.logger.warning(f"⚠️ Model {model_id} not found in available models for region {self.region}")
+                self.logger.warning(f"   Available models: {available_models[:5]}...")
+            
+            return is_available
+            
+        except Exception as e:
+            self.logger.warning(f"⚠️ Could not check model availability: {e}")
+            return True  # Assume available if check fails
     
     def _create_generic_request(self, messages: list, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Create request body for non-Anthropic models."""

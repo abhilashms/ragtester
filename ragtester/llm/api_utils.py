@@ -191,7 +191,30 @@ def _normalize_bedrock_model_name(model: str) -> str:
     Returns:
         The normalized model name
     """
-    # Remove common AWS region prefixes
+    # Skip normalization for models that need region prefixes
+    skip_normalization = [
+        # Models that require inference profiles (keep prefixes)
+        'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+        'eu.anthropic.claude-3-5-haiku-20241022-v1:0',
+        'ap.anthropic.claude-3-5-haiku-20241022-v1:0',
+        # Models that support on-demand access (keep prefixes for user preference)
+        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+        'eu.anthropic.claude-sonnet-4-20250514-v1:0',
+        'ap.anthropic.claude-sonnet-4-20250514-v1:0',
+        'us.anthropic.claude-3-5-sonnet-20241022-v1:0',
+        'eu.anthropic.claude-3-5-sonnet-20241022-v1:0',
+        'ap.anthropic.claude-3-5-sonnet-20241022-v1:0',
+        # Add other models that need prefixes
+    ]
+    
+    if model in skip_normalization:
+        # Import logging utilities
+        from ..logging_utils import get_logger
+        logger = get_logger()
+        logger.info(f"🔧 Keeping region prefix for model: {model}")
+        return model  # Keep the prefix
+    
+    # Remove common AWS region prefixes for other models
     region_prefixes = ['us.', 'eu.', 'ap.', 'ca.', 'sa.', 'af.', 'me.']
     
     for prefix in region_prefixes:
