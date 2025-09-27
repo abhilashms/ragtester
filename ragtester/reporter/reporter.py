@@ -100,6 +100,8 @@ def export_markdown(results: TestResults, path: str) -> None:
                 for e in sc.evaluations[:10]:
                     lines.append(f"- Q: {e.question.text}")
                     lines.append(f"  - score: {e.score:.2f}, verdict: {e.verdict}")
+                    if e.reasoning:
+                        lines.append(f"  - reasoning: {e.reasoning}")
                     total_questions += 1
                 lines.append("")
             
@@ -128,7 +130,9 @@ def export_html(results: TestResults, path: str) -> None:
             for cat, sc in results.scorecards.items():
                 category_html = f"<h2>{cat.value} (avg {sc.average_score:.3f})</h2>"
                 questions_html = "<ul>" + "".join(
-                    f"<li><b>Q:</b> {e.question.text} — <i>{e.score:.2f}</i> ({e.verdict})</li>" 
+                    f"<li><b>Q:</b> {e.question.text} — <i>{e.score:.2f}</i> ({e.verdict})"
+                    + (f"<br><small><b>Reasoning:</b> {e.reasoning}</small>" if e.reasoning else "")
+                    + "</li>" 
                     for e in sc.evaluations[:20]
                 ) + "</ul>"
                 rows.append(category_html + questions_html)

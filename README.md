@@ -192,7 +192,7 @@ def my_rag_function(question: str) -> str:
 
 # Configure the evaluation
 config = RAGTestConfig(
-    llm_config = LLMConfig(
+    llm = LLMConfig(
         provider="local",
         model=MODEL_PATH,
         temperature=0.7,

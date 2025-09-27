@@ -85,11 +85,10 @@ class LLMQuestionGenerator(QuestionGenerator):
         self.logger.debug("LLMQuestionGenerator initialized successfully")
 
     
-    def _prepare_single_random_context(self, document_paths: List[str]) -> tuple[str | List[Dict[str, Any]], Optional[object]]:
+    def _prepare_single_random_context(self, document_paths: List[str]) -> tuple[str, Optional[object]]:
         """
         Prepare context using single random page selection method.
-        For vision-capable LLMs: Returns PDF page as image data for direct processing
-        For text-only LLMs: Returns extracted text content using text extraction libraries
+        Uses text extraction from documents.
         
         Returns:
             tuple: (context_data, page_selection) where page_selection is None if error
@@ -98,128 +97,36 @@ class LLMQuestionGenerator(QuestionGenerator):
             # Select a single random page
             selection = self.random_page_loader.select_random_page(document_paths)
             
-            # Check if LLM supports vision (PDF/image processing)
-            if self._llm_supports_vision():
-                # For vision LLMs, convert PDF page to image and return as multimodal content
-                original_path = self._get_original_document_path(selection, document_paths)
-                
-                if original_path and original_path.lower().endswith('.pdf'):
-                    # Convert PDF page to image
-                    from ..document_loader.pdf_to_image import pdf_page_to_base64_image
-                    
-                    base64_image = pdf_page_to_base64_image(original_path, selection.page_number)
-                    if base64_image:
-                        # Return multimodal content with image
-                        multimodal_content = [
-                            {
-                                "type": "text",
-                                "text": f"Please analyze this PDF page (Page {selection.page_number + 1}) and generate a question based on its content."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": base64_image
-                                }
-                            }
-                        ]
-                        return multimodal_content, selection
-                    else:
-                        # Fallback to text if image conversion fails
-                        self.logger.warning(f"Failed to convert PDF page to image, falling back to text extraction")
-                        filename = os.path.basename(original_path) if original_path else "Unknown Document"
-                        formatted_content = f"[Document: {filename}, Page: {selection.page_number + 1}]\n\n{selection.text}"
-                        return formatted_content, selection
-                else:
-                    # For non-PDF documents with vision models, use text extraction
-                    filename = os.path.basename(original_path) if original_path else "Unknown Document"
-                    formatted_content = f"[Document: {filename}, Page: {selection.page_number + 1}]\n\n{selection.text}"
-                    return formatted_content, selection
-            else:
-                # For text-only LLMs, use text extraction libraries (current behavior)
-                original_path = self._get_original_document_path(selection, document_paths)
-                filename = os.path.basename(original_path) if original_path else "Unknown Document"
-                formatted_content = f"[Document: {filename}, Page: {selection.page_number + 1}]\n\n{selection.text}"
-                return formatted_content, selection
+            # Use text extraction
+            original_path = self._get_original_document_path(selection, document_paths)
+            filename = os.path.basename(original_path) if original_path else "Unknown Document"
+            formatted_content = f"[Document: {filename}, Page: {selection.page_number + 1}]\n\n{selection.text}"
+            return formatted_content, selection
             
         except Exception as e:
             self.logger.warning(f"Error selecting random page: {e}")
             return "No context available", None
     
-    def _clean_context_for_question_generation(self, context: str | List[Dict[str, Any]]) -> str | List[Dict[str, Any]]:
+    def _clean_context_for_question_generation(self, context: str) -> str:
         """
-        Minimal context cleaning - only remove file paths that could confuse the LLM.
+        Clean context by removing file paths that could confuse the LLM.
         Let the LLM handle document-specific cleaning through prompts.
         """
         if not context:
             return context
         
-        # If context is multimodal (list), return as-is for vision models
-        if isinstance(context, list):
-            return context
+        # Only remove file paths that could confuse the LLM - let LLM handle document structure
+        context = re.sub(r'file://[^\s]+', '', context)
+        context = re.sub(r'[A-Za-z]:/[^\s]+', '', context)  # Windows paths
+        context = re.sub(r'/[a-zA-Z0-9_/-]+\.pdf', '', context)  # PDF paths
+        context = re.sub(r'/[a-zA-Z0-9_/-]+\.docx?', '', context)  # DOCX paths
+        context = re.sub(r'#page=\d+', '', context)  # Page references
         
-        # For text context, apply cleaning
-        if isinstance(context, str):
-            # For vision LLM formatted content, extract only the content part
-            if context.startswith("DOCUMENT PAGE:") and "\n\nCONTENT:\n" in context:
-                # Extract only the content part after "CONTENT:"
-                content_part = context.split("\n\nCONTENT:\n", 1)[1] if "\n\nCONTENT:\n" in context else context
-                return content_part.strip()
-            
-            # Only remove file paths that could confuse the LLM - let LLM handle document structure
-            context = re.sub(r'file://[^\s]+', '', context)
-            context = re.sub(r'[A-Za-z]:/[^\s]+', '', context)  # Windows paths
-            context = re.sub(r'/[a-zA-Z0-9_/-]+\.pdf', '', context)  # PDF paths
-            context = re.sub(r'/[a-zA-Z0-9_/-]+\.docx?', '', context)  # DOCX paths
-            context = re.sub(r'#page=\d+', '', context)  # Page references
-            
-            # Clean up extra whitespace
-            context = re.sub(r'\s+', ' ', context).strip()
-            
-            return context
+        # Clean up extra whitespace
+        context = re.sub(r'\s+', ' ', context).strip()
         
         return context
     
-    def _llm_supports_vision(self) -> bool:
-        """Check if the current LLM supports vision (PDF/image processing)."""
-        # Check if using a vision-capable provider and model
-        provider_name = getattr(self.config.llm, 'provider', '') or ''
-        model_name = getattr(self.config.llm, 'model', '') or ''
-        
-        provider_name = provider_name.lower() if provider_name else ''
-        model_name = model_name.lower() if model_name else ''
-        
-        # Only return True for models that actually support vision
-        vision_models = [
-            # OpenAI Models
-            'gpt-4-vision', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
-            'o1-preview', 'o1-mini', 'o3',
-            # Anthropic Models
-            'claude-3-5-sonnet', 'claude-3-5-haiku', 'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku', 'claude-3.5-sonnet',
-            'claude-3.7-sonnet', 'claude-3-7-sonnet', 'claude-3.7-haiku', 'claude-3.7-opus',
-            # Google Models
-            'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-pro', 'gemini-pro-vision', 'gemini-ultra',
-            'palm-2', 'palm-e', 'pali-gemma', 'pali-gemma-2',
-            # Meta Models
-            'llama-3.2-vision', 'llama-3.1-vision', 'llava', 'llava-1.5', 'llava-1.6',
-            'llama-4-scout', 'llama-4-maverick', 'llama-4-behemoth',
-            # Mistral AI Models
-            'pixtral-12b', 'pixtral',
-            # Other Open Source Models
-            'qwen-vl', 'qwen-2.5-vl', 'cogvlm', 'minigpt-v2', 'instructblip', 'blip-2', 'blip',
-            'cogvlm2', 'internvl', 'deepseek-vl', 'deepseek-r1', 'yi-vl', 'phi-3-vision',
-            # Microsoft Models
-            'kosmos', 'kosmos-2',
-            # Baidu Models
-            'ernie-vil', 'ernie-vil-2',
-            # Alibaba Models
-            'qwen-vl-plus', 'qwen-vl-max',
-            # Other Vision-Language Models
-            'unified-io', 'flava', 'mplug', 'vlmo', 'minigpt-4', 'minigpt-v2',
-            'mplug-owl', 'otter', 'pandagpt', 'visualglm', 'visualglm-6b',
-            # Additional Vision Models
-            'flamingo', 'clip', 'vision-transformer', 'vit', 'dino-v2', 'sam', 'sam-2'
-        ]
-        return any(vm in model_name for vm in vision_models)
     
     def _get_original_document_path(self, selection, document_paths: List[str]) -> str:
         """Get the original document path for a given selection."""
@@ -234,23 +141,6 @@ class LLMQuestionGenerator(QuestionGenerator):
         # Fallback: if no exact match found, return the first path
         return document_paths[0] if document_paths else ""
     
-    def _get_pdf_page_path(self, selection, document_paths: List[str]) -> str:
-        """Get the path to the specific PDF page for vision LLMs."""
-        # Map the document ID back to the actual file path
-        from ..document_loader.base import make_document_id
-        
-        for path in document_paths:
-            # Generate the document ID for this path and compare with selection
-            doc_id = make_document_id(path)
-            if doc_id == selection.document_id:
-                return f"{path}#page={selection.page_number + 1}"  # PDF page reference
-        
-        # Fallback: if no exact match found, return the first PDF path
-        for path in document_paths:
-            if path.lower().endswith('.pdf'):
-                return f"{path}#page={selection.page_number + 1}"
-        
-        return document_paths[0] if document_paths else ""
 
     def _get_metric_definition(self, metric: EvaluationMetric) -> str:
         """Get the metric definition from the metrics judge."""
@@ -258,7 +148,7 @@ class LLMQuestionGenerator(QuestionGenerator):
         temp_judge = MetricsResponseJudge(self.config)
         return temp_judge._get_metric_prompt(metric)
     
-    def _get_metric_specific_user_prompt(self, metric: EvaluationMetric, context: str | List[Dict[str, Any]]) -> str | List[Dict[str, Any]]:
+    def _get_metric_specific_user_prompt(self, metric: EvaluationMetric, context: str) -> str:
         """Generate metric-specific user prompts with example questions."""
         
         # Example questions for each metric type - made more conversational and realistic
@@ -286,77 +176,35 @@ class LLMQuestionGenerator(QuestionGenerator):
             )
             metric_guidance = "Create a question that tests handling of uncertainty, limitations, or complex situations. Focus on edge cases, limitations, or ambiguous content that requires careful, nuanced responses."
         
-        # Handle multimodal content for vision models
-        if isinstance(context, list):
-            # For vision models, create multimodal prompt
-            multimodal_prompt = [
-                {
-                    "type": "text",
-                    "text": (
-                        "Based on the content in this image, create exactly one clean, conversational question that a real person would genuinely ask about this information.\n\n"
-                        "ABSOLUTELY FORBIDDEN - NEVER INCLUDE:\n"
-                        "  - ANY numbering at the start (1., 2., 6., 42., etc.)\n"
-                        "  - Chapter references ('Chapter 12', 'CHAPTER 4', etc.)\n"
-                        "  - Section headers ('Learning Input-Output Functions', 'A Method Based on', etc.)\n"
-                        "  - Figure/table references ('Figure 9.4:', 'Table 2.1:', etc.)\n"
-                        "  - Academic phrases ('as described in', 'in the text', 'according to')\n"
-                        "  - Section titles or subsection names\n"
-                        "  - Any document structure elements\n"
-                        "  - Formal or academic language\n\n"
-                        "REAL USER QUESTION REQUIREMENTS:\n"
-                        "  - Return ONLY the clean question text, nothing else. It must end with a question mark.\n"
-                        "  - Base the question only on the content in the image — don't ask about systems or performance.\n"
-                        f"  - Make it the type of question that would test {metric_guidance.lower()}\n"
-                        "  - Sound like a REAL PERSON asking a friend or colleague - be conversational and curious\n"
-                        "  - Use everyday language that normal people use in conversation\n"
-                        "  - Start the question naturally - don't use academic phrases\n"
-                        "  - Don't reference chapters, sections, or document structure\n"
-                        "  - Make it sound like genuine curiosity, not academic analysis\n"
-                        "  - Use natural, human-like phrasing\n"
-                        "  - Ensure the question is complete and makes sense on its own\n"
-                        "  - REMEMBER: Real users ask simple, direct questions without document references!\n\n"
-                        "EXAMPLE STYLE (for reference):\n"
-                        f"{example_questions}\n\n"
-                        "Your clean, conversational question:"
-                    )
-                }
-            ]
-            # Add the image content from the context
-            multimodal_prompt.extend(context[1:])  # Skip the first text element from context
-            return multimodal_prompt
-        else:
-            # For text-only models, create text prompt
-            user_prompt = (
-                "Based on the following content, create exactly one clean, conversational question that a real person would genuinely ask about this information.\n\n"
-                "ABSOLUTELY FORBIDDEN - NEVER INCLUDE:\n"
-                "  - ANY numbering at the start (1., 2., 6., 42., etc.)\n"
-                "  - Chapter references ('Chapter 12', 'CHAPTER 4', etc.)\n"
-                "  - Section headers ('Learning Input-Output Functions', 'A Method Based on', etc.)\n"
-                "  - Figure/table references ('Figure 9.4:', 'Table 2.1:', etc.)\n"
-                "  - Academic phrases ('as described in', 'in the text', 'according to')\n"
-                "  - Section titles or subsection names\n"
-                "  - Any document structure elements\n"
-                "  - Formal or academic language\n\n"
-                "REAL USER QUESTION REQUIREMENTS:\n"
-                "  - Return ONLY the clean question text, nothing else. It must end with a question mark.\n"
-                "  - Base the question only on the provided content — don't ask about systems or performance.\n"
-                f"  - Make it the type of question that would test {metric_guidance.lower()}\n"
-                "  - Sound like a REAL PERSON asking a friend or colleague - be conversational and curious\n"
-                "  - Use everyday language that normal people use in conversation\n"
-                "  - Start the question naturally - don't use academic phrases\n"
-                "  - Don't reference chapters, sections, or document structure\n"
-                "  - Make it sound like genuine curiosity, not academic analysis\n"
-                "  - Use natural, human-like phrasing\n"
-                "  - Ensure the question is complete and makes sense on its own\n"
-                "  - REMEMBER: Real users ask simple, direct questions without document references!\n\n"
-                "CONTENT:\n"
-                f"{context}\n\n"
-                "EXAMPLE STYLE (for reference):\n"
-                f"{example_questions}\n\n"
-                "Your clean, conversational question:"
-            )
-
-        
+        # Use text-based prompts
+        user_prompt = (
+            "Based on the following content, create exactly one clean, conversational question that a real person would genuinely ask about this information.\n\n"
+            "ABSOLUTELY FORBIDDEN - NEVER INCLUDE:\n"
+            "  - ANY numbering at the start (1., 2., 6., 42., etc.)\n"
+            "  - Chapter references ('Chapter 12', 'CHAPTER 4', etc.)\n"
+            "  - Section headers ('Learning Input-Output Functions', 'A Method Based on', etc.)\n"
+            "  - Figure/table references ('Figure 9.4:', 'Table 2.1:', etc.)\n"
+            "  - Academic phrases ('as described in', 'in the text', 'according to')\n"
+            "  - Section titles or subsection names\n"
+            "  - Any document structure elements\n"
+            "  - Formal or academic language\n\n"
+            "REAL USER QUESTION REQUIREMENTS:\n"
+            "  - Return ONLY the clean question text, nothing else. It must end with a question mark.\n"
+            "  - Base the question only on the provided content — don't ask about systems or performance.\n"
+            f"  - Make it the type of question that would test {metric_guidance.lower()}\n"
+            "  - Sound like a REAL user asking a question\n"
+            "  - Use everyday language that normal people use in conversation\n"
+            "  - Start the question naturally - don't use academic phrases\n"
+            "  - Don't reference chapters, sections, or document structure\n"  
+            "  - Use natural, human-like phrasing\n"
+            "  - Ensure the question is complete and makes sense on its own\n"
+            "  - REMEMBER: Real users ask simple, direct questions without document references!\n\n"
+            "CONTENT:\n"
+            f"{context}\n\n"
+            "EXAMPLE STYLE (for reference):\n"
+            f"{example_questions}\n\n"
+            "Your clean, conversational question:"
+        )
         return user_prompt
 
     def _clean_question_text(self, text: str) -> str:
@@ -444,13 +292,10 @@ class LLMQuestionGenerator(QuestionGenerator):
                     # Generate a new random context for each question (single page)
                     raw_context, selection = self._prepare_single_random_context(document_paths)
                     
-                    # Log context type for debugging
-                    if isinstance(raw_context, list):
-                        self.logger.debug("Generated multimodal context for vision-capable LLM")
-                    else:
-                        self.logger.debug(f"Generated text context: {raw_context[:100]}...")
+                    # Log context for debugging
+                    self.logger.debug(f"Generated text context: {raw_context[:100]}...")
                     
-                    # Clean context if needed (only for text content)
+                    # Clean context if needed
                     context = self._clean_context_for_question_generation(raw_context)
                     
                     # Create metric-specific user prompt
@@ -460,24 +305,13 @@ class LLMQuestionGenerator(QuestionGenerator):
                     )
                     
                     # Log user prompt for debugging
-                    if isinstance(user_prompt, list):
-                        self.logger.debug("Created multimodal user prompt for vision model")
-                    else:
-                        self.logger.debug(f"User prompt: {user_prompt[:150]}...")
+                    self.logger.debug(f"User prompt: {user_prompt[:150]}...")
                     
-                    # Create messages based on content type
-                    if isinstance(user_prompt, list):
-                        # Multimodal content for vision models
-                        messages: List[LLMMessage] = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ]
-                    else:
-                        # Text content for text-only models
-                        messages: List[LLMMessage] = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ]
+                    # Create messages
+                    messages: List[LLMMessage] = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ]
                     
                     self.logger.log_llm_request(
                         self.config.llm.provider,
@@ -751,7 +585,7 @@ class LLMQuestionGenerator(QuestionGenerator):
                         # Generate a new random context for each question (single page)
                         raw_context, selection = self._prepare_single_random_context(document_paths)
                         
-                        # Clean context if needed (only for text content)
+                        # Clean context if needed
                         context = self._clean_context_for_question_generation(raw_context)
                         
                         # Create metric-specific user prompt
@@ -760,19 +594,11 @@ class LLMQuestionGenerator(QuestionGenerator):
                             context=context
                         )
                         
-                        # Create messages based on content type
-                        if isinstance(user_prompt, list):
-                            # Multimodal content for vision models
-                            messages: List[LLMMessage] = [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ]
-                        else:
-                            # Text content for text-only models
-                            messages: List[LLMMessage] = [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_prompt},
-                            ]
+                        # Create messages
+                        messages: List[LLMMessage] = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ]
                         
                         self.logger.log_llm_request(
                             self.config.llm.provider,

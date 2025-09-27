@@ -110,18 +110,42 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError, NoCredentialsError
             self.logger.debug("✅ boto3 imported successfully")
             
-            # Check AWS credentials
+            # Check AWS credentials and configuration
             self.logger.info("🔑 CHECKING AWS CREDENTIALS")
             self.logger.info("-" * 30)
+            
+            # Check AWS configuration first
+            self._check_aws_configuration()
+            
+            # Handle AWS profile configuration
+            aws_profile = os.getenv('AWS_PROFILE')
+            self.logger.info(f"  🔑 AWS Profile: {aws_profile if aws_profile else 'default (from AWS CLI config)'}")
+            
+            # Create boto3 session - let boto3 handle the credential chain
+            session = self._create_boto3_session()
+            if aws_profile:
+                # User explicitly specified a profile
+                self.logger.info(f"  💡 Using explicitly specified profile: {aws_profile}")
+            else:
+                # Use default credential chain (AWS CLI default config, env vars, IAM roles, etc.)
+                self.logger.info(f"  💡 Using default AWS credential chain")
+                self.logger.info(f"  💡 This will check: AWS CLI config, environment variables, IAM roles")
+            
+            # Test credentials
             try:
-                # Try to get AWS session info
-                session = boto3.Session()
                 credentials = session.get_credentials()
                 if credentials:
                     self.logger.info("✅ AWS credentials found")
                     self.logger.info(f"  🔑 Access Key ID: {credentials.access_key[:4]}...{credentials.access_key[-4:]}")
                     self.logger.info(f"  🔑 Secret Key: {'*' * 20}")
                     self.logger.info(f"  🔑 Session Token: {'Present' if credentials.token else 'None'}")
+                    
+                    # Get the actual profile being used
+                    actual_profile = session.profile_name
+                    if actual_profile:
+                        self.logger.info(f"  🔑 Using profile: {actual_profile}")
+                    else:
+                        self.logger.info(f"  🔑 Using default credential chain (no specific profile)")
                 else:
                     self.logger.warning("⚠️ No AWS credentials found in session")
             except Exception as e:
@@ -133,17 +157,6 @@ class BedrockLLM(LLMProvider):
             self.logger.info(f"  📍 Region: {self.region}")
             self.logger.info(f"  ⚙️ Client kwargs: {self.client_kwargs}")
             self.logger.info(f"  🔧 Service: bedrock-runtime")
-            
-            # Handle AWS profile configuration
-            aws_profile = os.getenv('AWS_PROFILE', 'default')
-            self.logger.info(f"  🔑 AWS Profile: {aws_profile}")
-            
-            if aws_profile == 'default' and not os.getenv('AWS_PROFILE'):
-                self.logger.info(f"  💡 Using default AWS profile (no AWS_PROFILE env var set)")
-                self.logger.info(f"  💡 To use a specific profile, set: export AWS_PROFILE=your-profile-name")
-            
-            # Create boto3 session with explicit profile
-            session = boto3.Session(profile_name=aws_profile)
             self._client = session.client(
                 'bedrock-runtime',
                 region_name=self.region,
@@ -214,17 +227,35 @@ class BedrockLLM(LLMProvider):
                     self.logger.warning(f"⚠️ Could not verify model availability: {e}")
             except NoCredentialsError:
                 self.logger.error("❌ AWS credentials not found!")
-                self.logger.error("Please configure AWS credentials using:")
-                self.logger.error("  - AWS CLI: aws configure")
-                self.logger.error("  - Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
-                self.logger.error("  - IAM roles (if running on EC2)")
-                self.logger.error("  - AWS Profile: export AWS_PROFILE=your-profile-name")
                 self.logger.error("")
-                self.logger.error("💡 TIP: If you have multiple AWS profiles, try:")
-                self.logger.error("   export AWS_PROFILE=default")
-                self.logger.error("   or")
-                self.logger.error("   export AWS_PROFILE=your-specific-profile")
-                raise RuntimeError("AWS credentials not found. Please configure AWS credentials.")
+                self.logger.error("🔧 AWS CREDENTIAL CONFIGURATION OPTIONS:")
+                self.logger.error("")
+                self.logger.error("1️⃣ AWS CLI Configuration (Recommended):")
+                self.logger.error("   Run: aws configure")
+                self.logger.error("   This will create ~/.aws/credentials and ~/.aws/config files")
+                self.logger.error("   The provider will automatically use these default credentials")
+                self.logger.error("")
+                self.logger.error("2️⃣ Environment Variables:")
+                self.logger.error("   export AWS_ACCESS_KEY_ID=your-access-key")
+                self.logger.error("   export AWS_SECRET_ACCESS_KEY=your-secret-key")
+                self.logger.error("   export AWS_DEFAULT_REGION=us-east-1")
+                self.logger.error("")
+                self.logger.error("3️⃣ IAM Roles (if running on EC2/ECS/Lambda):")
+                self.logger.error("   Attach an IAM role with Bedrock permissions to your instance")
+                self.logger.error("")
+                self.logger.error("4️⃣ Multiple AWS Profiles:")
+                self.logger.error("   If you have multiple profiles, specify one:")
+                self.logger.error("   export AWS_PROFILE=your-profile-name")
+                self.logger.error("")
+                self.logger.error("💡 QUICK START:")
+                self.logger.error("   If you haven't configured AWS CLI yet, run:")
+                self.logger.error("   aws configure")
+                self.logger.error("   Then enter your AWS Access Key ID, Secret Access Key, and region")
+                self.logger.error("")
+                self.logger.error("🔍 VERIFY YOUR SETUP:")
+                self.logger.error("   Test your credentials with: aws sts get-caller-identity")
+                self.logger.error("   List Bedrock models with: aws bedrock list-foundation-models --region us-east-1")
+                raise RuntimeError("AWS credentials not found. Please configure AWS credentials using 'aws configure' or environment variables.")
                 
         except ImportError as e:
             self.logger.error(f"❌ Import error: {e}")
@@ -240,6 +271,99 @@ class BedrockLLM(LLMProvider):
             raise
         
         self.logger.debug("✅ Bedrock client initialization completed successfully")
+    
+    def _create_boto3_session(self, region_name: str = None) -> 'boto3.Session':
+        """
+        Create a boto3 session with proper AWS credential chain handling.
+        
+        Args:
+            region_name: Optional region name for the session
+            
+        Returns:
+            Configured boto3 session
+        """
+        aws_profile = os.getenv('AWS_PROFILE')
+        if aws_profile:
+            # User explicitly specified a profile
+            session = boto3.Session(profile_name=aws_profile)
+        else:
+            # Use default credential chain (AWS CLI default config, env vars, IAM roles, etc.)
+            session = boto3.Session()
+        
+        return session
+    
+    def _check_aws_configuration(self) -> None:
+        """
+        Check and display AWS configuration information to help users understand their setup.
+        """
+        try:
+            import boto3
+            from botocore.exceptions import ClientError, NoCredentialsError
+            
+            self.logger.info("🔍 CHECKING AWS CONFIGURATION")
+            self.logger.info("-" * 40)
+            
+            # Check AWS CLI configuration files
+            import os
+            from pathlib import Path
+            
+            home_dir = Path.home()
+            aws_dir = home_dir / '.aws'
+            credentials_file = aws_dir / 'credentials'
+            config_file = aws_dir / 'config'
+            
+            if aws_dir.exists():
+                self.logger.info(f"✅ AWS configuration directory found: {aws_dir}")
+                
+                if credentials_file.exists():
+                    self.logger.info(f"✅ AWS credentials file found: {credentials_file}")
+                else:
+                    self.logger.info(f"⚠️ AWS credentials file not found: {credentials_file}")
+                
+                if config_file.exists():
+                    self.logger.info(f"✅ AWS config file found: {config_file}")
+                else:
+                    self.logger.info(f"⚠️ AWS config file not found: {config_file}")
+            else:
+                self.logger.info(f"⚠️ AWS configuration directory not found: {aws_dir}")
+                self.logger.info(f"   Run 'aws configure' to create AWS CLI configuration")
+            
+            # Check environment variables
+            env_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE', 'AWS_DEFAULT_REGION']
+            env_found = []
+            for var in env_vars:
+                if os.getenv(var):
+                    env_found.append(var)
+            
+            if env_found:
+                self.logger.info(f"✅ Environment variables found: {', '.join(env_found)}")
+            else:
+                self.logger.info(f"ℹ️ No AWS environment variables found")
+            
+            # Test credentials with a simple call
+            try:
+                session = self._create_boto3_session()
+                sts_client = session.client('sts', region_name='us-east-1')
+                identity = sts_client.get_caller_identity()
+                
+                self.logger.info(f"✅ AWS credentials are valid")
+                self.logger.info(f"  🆔 Account: {identity.get('Account', 'Unknown')}")
+                self.logger.info(f"  👤 User ID: {identity.get('UserId', 'Unknown')}")
+                self.logger.info(f"  🏷️ ARN: {identity.get('Arn', 'Unknown')}")
+                
+            except NoCredentialsError:
+                self.logger.warning(f"⚠️ No AWS credentials found")
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'InvalidUserID.NotFound':
+                    self.logger.warning(f"⚠️ AWS credentials found but user not found")
+                else:
+                    self.logger.warning(f"⚠️ AWS credentials test failed: {error_code}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not test AWS credentials: {e}")
+                
+        except Exception as e:
+            self.logger.debug(f"Could not check AWS configuration: {e}")
     
     def _validate_model(self) -> str:
         """Validate and normalize the model name format."""
@@ -796,7 +920,7 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            session = self._create_boto3_session()
             temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models to check availability
@@ -886,7 +1010,7 @@ class BedrockLLM(LLMProvider):
             self.logger.info(f"🔍 Searching for inference profiles in region {self.region}")
             
             # Create a temporary client for checking inference profiles
-            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            session = self._create_boto3_session()
             temp_client = session.client('bedrock', region_name=self.region)
             
             # List inference profiles
@@ -1023,7 +1147,7 @@ class BedrockLLM(LLMProvider):
                 self.logger.info(f"🔍 Searching in region: {region}")
                 
                 import boto3
-                session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+                session = self._create_boto3_session()
                 temp_client = session.client('bedrock', region_name=region)
                 
                 # List inference profiles in this region
@@ -1077,7 +1201,7 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            session = self._create_boto3_session()
             temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models
@@ -1124,7 +1248,7 @@ class BedrockLLM(LLMProvider):
             from botocore.exceptions import ClientError
             
             # Create a temporary client for checking model availability
-            session = boto3.Session(profile_name=os.getenv('AWS_PROFILE', 'default'))
+            session = self._create_boto3_session()
             temp_client = session.client('bedrock', region_name=self.region)
             
             # List foundation models to check availability

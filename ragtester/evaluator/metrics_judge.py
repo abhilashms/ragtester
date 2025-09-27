@@ -395,15 +395,25 @@ class MetricsResponseJudge(ResponseEvaluator):
         cleaned_text = re.sub(r'\d+\.?\s*\d+/5', '', cleaned_text)
         cleaned_text = re.sub(r'^\d+\.?\s*', '', cleaned_text, flags=re.MULTILINE)  # Remove numbered list prefixes
         
-        # Remove "justification:" prefix if present
+        # Remove "justification:" prefix if present (including markdown formatting)
         if cleaned_text.lower().startswith('justification:'):
             cleaned_text = cleaned_text[13:].strip()  # Remove "justification:" (13 characters)
+        elif cleaned_text.lower().startswith('**justification**:'):
+            cleaned_text = cleaned_text[18:].strip()  # Remove "**justification**:" (18 characters)
         
         # Remove leading colons and spaces
         cleaned_text = re.sub(r'^:\s*', '', cleaned_text)
         
-        # Remove sub-metric scores like "Fluency: 4"
+        # Remove sub-metric scores like "Fluency: 4" and markdown formatted scores
         cleaned_text = re.sub(r'^(Fluency|Clarity|Conciseness|Justification):\s*\d+\.?\d*\s*\n?', '', cleaned_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'\*\*(Fluency|Clarity|Conciseness|Justification)\*\*:\s*\d+\.?\d*\s*\n?', '', cleaned_text, flags=re.MULTILINE)
+        
+        # Remove **Score**: X patterns more comprehensively
+        cleaned_text = re.sub(r'\*\*Score\*\*:\s*\d+\.?\d*', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r'Score:\s*\d+\.?\d*', '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Remove **Justification**: prefix
+        cleaned_text = re.sub(r'\*\*Justification\*\*:\s*', '', cleaned_text, flags=re.IGNORECASE)
         
         # Remove standalone numbers (scores without context)
         if re.match(r'^\d+\.?\d*$', cleaned_text.strip()):
@@ -447,17 +457,17 @@ justification: [detailed explanation of your reasoning]"""
             context = self._get_context_for_evaluation(response)
             user_prompt = f"""{metric_user_prompt}
 
-{few_shot_examples}
+            {few_shot_examples}
 
-Now evaluate this case:
+            Now evaluate this case:
 
-QUESTION: {response.question.text}
+            QUESTION: {response.question.text}
 
-SYSTEM RESPONSE: {response.answer or ""}
+            SYSTEM RESPONSE: {response.answer or ""}
 
-SOURCE DOCUMENTS: {context}
+            SOURCE DOCUMENTS: {context}
 
-Please follow the step-by-step reasoning process and provide your evaluation."""
+            Please follow the step-by-step reasoning process and provide your evaluation."""
         else:
             user_prompt = f"""{metric_user_prompt}
 
@@ -547,10 +557,19 @@ Please follow the step-by-step reasoning process and provide your evaluation."""
         
         # Clean the raw response
         raw_response = raw_response.strip()
+        
+        # DEBUG: Log the full raw response
+        self.logger.debug(f"[{metric.value}] Full raw LLM response:")
+        self.logger.debug(f"[{metric.value}] Raw response length: {len(raw_response)} characters")
+        self.logger.debug(f"[{metric.value}] Raw response content: {repr(raw_response)}")
+        self.logger.debug(f"[{metric.value}] Raw response formatted:")
+        for i, line in enumerate(raw_response.split('\n'), 1):
+            self.logger.debug(f"[{metric.value}] Line {i}: {repr(line)}")
         if not raw_response:
             return None, "No response provided"
         
         # Strategy 1: Look for explicit score: and justification: format
+        self.logger.debug(f"[{metric.value}] Strategy 1: Looking for explicit score: and justification: format")
         lines = raw_response.split('\n')
         score_found = False
         justification_found = False
@@ -565,14 +584,19 @@ Please follow the step-by-step reasoning process and provide your evaluation."""
                     score = float(score_str)
                     if 1 <= score <= 5:
                         score_found = True
+                        self.logger.debug(f"[{metric.value}] Strategy 1: Found score: {score}")
                 except ValueError:
                     pass
             elif line.lower().startswith('justification:'):
                 justification = line.split(':', 1)[1].strip()
                 justification_found = True
+                self.logger.debug(f"[{metric.value}] Strategy 1: Found justification: {repr(justification)}")
+        
+        self.logger.debug(f"[{metric.value}] Strategy 1 result: score_found={score_found}, justification_found={justification_found}")
         
         # Strategy 2: If explicit format not found, use semantic extraction
         if not score_found or not justification_found:
+            self.logger.debug(f"[{metric.value}] Strategy 2: Using semantic extraction")
             # Extract score using multiple patterns
             score_patterns = [
                 r'score[:\s]*(\d+)',
@@ -585,20 +609,25 @@ Please follow the step-by-step reasoning process and provide your evaluation."""
             
             for pattern in score_patterns:
                 matches = re.findall(pattern, raw_response.lower())
+                self.logger.debug(f"[{metric.value}] Strategy 2: Pattern '{pattern}' found matches: {matches}")
                 for match in matches:
                     try:
                         candidate_score = float(match)
                         if 1 <= candidate_score <= 5:
                             score = candidate_score
                             score_found = True
+                            self.logger.debug(f"[{metric.value}] Strategy 2: Found score: {score}")
                             break
                     except ValueError:
                         continue
                 if score_found:
                     break
+            
+            self.logger.debug(f"[{metric.value}] Strategy 2 result: score_found={score_found}, score={score}")
         
         # Strategy 3: Extract justification using semantic understanding
         if not justification_found:
+            self.logger.debug(f"[{metric.value}] Strategy 3: Using semantic justification patterns")
             # Look for justification patterns
             justification_patterns = [
                 r'justification[:\s]*(.+)',
@@ -612,20 +641,30 @@ Please follow the step-by-step reasoning process and provide your evaluation."""
             
             for pattern in justification_patterns:
                 matches = re.findall(pattern, raw_response, re.IGNORECASE | re.DOTALL)
+                self.logger.debug(f"[{metric.value}] Strategy 3: Pattern '{pattern}' found matches: {[repr(m) for m in matches]}")
                 if matches:
                     justification = matches[0].strip()
+                    self.logger.debug(f"[{metric.value}] Strategy 3: Found justification candidate: {repr(justification)}")
                     if len(justification) > 10:  # Ensure it's substantial
                         justification_found = True
+                        self.logger.debug(f"[{metric.value}] Strategy 3: Justification accepted (length: {len(justification)})")
                         break
+                    else:
+                        self.logger.debug(f"[{metric.value}] Strategy 3: Justification rejected (too short: {len(justification)})")
+            
+            self.logger.debug(f"[{metric.value}] Strategy 3 result: justification_found={justification_found}")
         
         # Strategy 4: If still no justification, use the most relevant part of the response
         if not justification_found:
+            self.logger.debug(f"[{metric.value}] Strategy 4: Looking for reasoning indicators in sentences")
             # Find the longest sentence or paragraph that seems like reasoning
             sentences = re.split(r'[.!?]\s+', raw_response)
+            self.logger.debug(f"[{metric.value}] Strategy 4: Split into {len(sentences)} sentences")
             best_justification = ""
             
-            for sentence in sentences:
+            for i, sentence in enumerate(sentences):
                 sentence = sentence.strip()
+                self.logger.debug(f"[{metric.value}] Strategy 4: Sentence {i+1}: {repr(sentence)}")
                 # Look for reasoning indicators
                 reasoning_indicators = [
                     'because', 'since', 'due to', 'as a result', 'therefore', 'thus',
@@ -634,33 +673,55 @@ Please follow the step-by-step reasoning process and provide your evaluation."""
                     'quality', 'clarity', 'fluency', 'toxic', 'safe', 'secure'
                 ]
                 
-                if any(indicator in sentence.lower() for indicator in reasoning_indicators):
+                found_indicators = [ind for ind in reasoning_indicators if ind in sentence.lower()]
+                if found_indicators:
+                    self.logger.debug(f"[{metric.value}] Strategy 4: Sentence {i+1} has indicators: {found_indicators}")
                     if len(sentence) > len(best_justification):
                         best_justification = sentence
+                        self.logger.debug(f"[{metric.value}] Strategy 4: New best justification: {repr(best_justification)}")
             
             if best_justification and len(best_justification) > 10:
                 justification = best_justification
+                self.logger.debug(f"[{metric.value}] Strategy 4: Using best justification (length: {len(justification)})")
             else:
                 # Last resort: use the response after removing score information
+                self.logger.debug(f"[{metric.value}] Strategy 4: Using last resort - cleaned response")
                 cleaned_response = re.sub(r'score[:\s]*\d+', '', raw_response, flags=re.IGNORECASE)
                 cleaned_response = re.sub(r'\d+/5', '', cleaned_response)
                 cleaned_response = re.sub(r'\b\d+\b', '', cleaned_response)  # Remove standalone numbers
                 justification = cleaned_response.strip()
+                self.logger.debug(f"[{metric.value}] Strategy 4: Last resort justification: {repr(justification)}")
+            
+            self.logger.debug(f"[{metric.value}] Strategy 4 result: justification_found=True, justification length={len(justification)}")
         
         # Clean up justification
+        self.logger.debug(f"[{metric.value}] Before cleanup: justification={repr(justification)}")
         if justification:
             # Remove common prefixes
+            old_justification = justification
             justification = re.sub(r'^(justification|reasoning|explanation)[:\s]*', '', justification, flags=re.IGNORECASE)
+            if old_justification != justification:
+                self.logger.debug(f"[{metric.value}] Removed prefixes: {repr(old_justification)} -> {repr(justification)}")
+            
             # Remove score references
+            old_justification = justification
             justification = re.sub(r'score[:\s]*\d+', '', justification, flags=re.IGNORECASE)
+            if old_justification != justification:
+                self.logger.debug(f"[{metric.value}] Removed score references: {repr(old_justification)} -> {repr(justification)}")
+            
             justification = justification.strip()
+            self.logger.debug(f"[{metric.value}] After cleanup: justification={repr(justification)}")
         
         # Final validation
         if not justification or len(justification) < 5:
+            old_justification = justification
             justification = f"Evaluation based on {metric.value.lower()} criteria"
+            self.logger.debug(f"[{metric.value}] Final validation: replaced {repr(old_justification)} with {repr(justification)}")
         
         # Return None for score if no valid score was found
-        return score if score is not None else None, justification
+        final_result = (score if score is not None else None, justification)
+        self.logger.debug(f"[{metric.value}] Final result: score={final_result[0]}, justification={repr(final_result[1])}")
+        return final_result
 
     def _get_faithfulness_examples(self, response: RAGResponse) -> str:
         """Generate faithfulness-specific examples."""
@@ -785,7 +846,9 @@ justification: The response is too vague and doesn't provide meaningful informat
                 raw = self.llm.chat(messages)
                 
                 # Parse the response using enhanced semantic parsing
+                self.logger.debug(f"[{metric.value}] Calling _parse_enhanced_response with raw response")
                 score, justification = self._parse_enhanced_response(raw, metric)
+                self.logger.debug(f"[{metric.value}] _parse_enhanced_response returned: score={score}, justification={repr(justification)}")
                 
                 # Check if we got a valid score
                 if score is None or not isinstance(score, (int, float)) or score < 1.0 or score > 5.0:
@@ -806,7 +869,9 @@ justification: The response is too vague and doesn't provide meaningful informat
                 final_score = int(round(max(1.0, min(5.0, score))))
                 
                 # Clean up justification by removing metric name prefix if present
+                self.logger.debug(f"[{metric.value}] Before _clean_justification_text: justification={repr(justification)}")
                 cleaned_justification = self._clean_justification_text(justification, metric.value)
+                self.logger.debug(f"[{metric.value}] After _clean_justification_text: cleaned_justification={repr(cleaned_justification)}")
                 
                 # Check if we have adequate reasoning - if not, retry
                 if (not cleaned_justification or 
@@ -889,6 +954,21 @@ justification: The response is too vague and doesn't provide meaningful informat
                 if clean_justification.startswith(prefix):
                     clean_justification = clean_justification[len(prefix):].strip()
                     break
+            
+            # Clean up formatting markers from the justification
+            import re
+            
+            # Remove **Score**: X patterns and similar formatting
+            clean_justification = re.sub(r'\*\*Score\*\*:\s*\d+', '', clean_justification)
+            clean_justification = re.sub(r'\*\*Justification\*\*:\s*', '', clean_justification)
+            clean_justification = re.sub(r'justification:\s*', '', clean_justification, flags=re.IGNORECASE)
+            
+            # Remove any remaining markdown formatting
+            clean_justification = re.sub(r'\*\*', '', clean_justification)
+            
+            # Clean up extra whitespace and newlines
+            clean_justification = re.sub(r'\n\s*\n', '\n', clean_justification)
+            clean_justification = clean_justification.strip()
             
             # Use proper metric display name
             metric_display_name = {
