@@ -178,32 +178,37 @@ class ProviderHealthChecker:
     
     def print_health_report(self, health_statuses: List[ProviderHealthStatus]) -> None:
         """Print a formatted health report."""
-        print("\n" + "="*60)
-        print("LLM PROVIDER HEALTH CHECK REPORT")
-        print("="*60)
+        from ..logging_utils import get_logger
         
-        healthy_count = 0
-        unhealthy_count = 0
+        logger = get_logger()
         
-        for status in health_statuses:
-            if status.status == "healthy":
-                healthy_count += 1
-                print(f"✅ {status.provider.upper()}")
-                if status.model:
-                    print(f"   Model: {status.model}")
-                if status.response_time:
-                    print(f"   Response Time: {status.response_time:.2f}s")
-            else:
-                unhealthy_count += 1
-                print(f"❌ {status.provider.upper()}")
-                if status.model:
-                    print(f"   Model: {status.model}")
-                if status.error_message:
-                    print(f"   Error: {status.error_message}")
-        
-        print("\n" + "-"*60)
-        print(f"SUMMARY: {healthy_count} healthy, {unhealthy_count} unhealthy")
-        print("="*60)
+        with logger.operation_context("health_report"):
+            logger.info("\n" + "="*60)
+            logger.info("LLM PROVIDER HEALTH CHECK REPORT")
+            logger.info("="*60)
+            
+            healthy_count = 0
+            unhealthy_count = 0
+            
+            for status in health_statuses:
+                if status.status == "healthy":
+                    healthy_count += 1
+                    logger.info(f"✅ {status.provider.upper()}")
+                    if status.model:
+                        logger.info(f"   Model: {status.model}")
+                    if status.response_time:
+                        logger.info(f"   Response Time: {status.response_time:.2f}s")
+                else:
+                    unhealthy_count += 1
+                    logger.warning(f"❌ {status.provider.upper()}")
+                    if status.model:
+                        logger.warning(f"   Model: {status.model}")
+                    if status.error_message:
+                        logger.warning(f"   Error: {status.error_message}")
+            
+            logger.info("\n" + "-"*60)
+            logger.info(f"SUMMARY: {healthy_count} healthy, {unhealthy_count} unhealthy")
+            logger.info("="*60)
 
 
 def run_health_check(provider_name: str = None, **kwargs) -> ProviderHealthStatus:

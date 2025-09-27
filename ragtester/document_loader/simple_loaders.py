@@ -65,21 +65,21 @@ class PDFFileLoader(DocumentLoader):
     def __init__(self) -> None:
         self.logger = get_logger()
         try:
-            import PyPDF2  # type: ignore
-            self._pypdf2_available = True
-            self.logger.debug("PyPDF2 library available for PDF processing")
+            import fitz  # PyMuPDF  # type: ignore
+            self._pymupdf_available = True
+            self.logger.debug("PyMuPDF library available for PDF processing")
         except Exception as e:
-            self._pypdf2_available = False
-            self.logger.warning(f"PyPDF2 library not available: {e}")
+            self._pymupdf_available = False
+            self.logger.warning(f"PyMuPDF library not available: {e}")
 
     def load(self, paths: Iterable[str]) -> List[Document]:
         with log_operation("pdf_file_loading", loader="PDFFileLoader"):
             documents: List[Document] = []
-            if not self._pypdf2_available:
-                self.logger.warning("PDF processing skipped - PyPDF2 not available")
+            if not self._pymupdf_available:
+                self.logger.warning("PDF processing skipped - PyMuPDF not available")
                 return documents
 
-            import PyPDF2  # type: ignore
+            import fitz  # PyMuPDF  # type: ignore
             processed_count = 0
             skipped_count = 0
             error_count = 0
@@ -93,20 +93,21 @@ class PDFFileLoader(DocumentLoader):
                     continue
                 try:
                     start_time = time.time()
-                    with open(normalized_path, "rb") as f:
-                        reader = PyPDF2.PdfReader(f)
-                        texts = []
-                        page_count = len(reader.pages)
-                        
-                        for page_num, page in enumerate(getattr(reader, "pages", [])):
-                            try:
-                                page_text = page.extract_text() or ""
-                                texts.append(page_text)
-                            except Exception as e:
-                                self.logger.debug(f"Error extracting text from page {page_num + 1}: {e}")
-                                continue
-                        
-                        text = "\n".join(texts)
+                    doc = fitz.open(normalized_path)
+                    texts = []
+                    page_count = doc.page_count
+                    
+                    for page_num in range(page_count):
+                        try:
+                            page = doc[page_num]
+                            page_text = page.get_text() or ""
+                            texts.append(page_text)
+                        except Exception as e:
+                            self.logger.debug(f"Error extracting text from page {page_num + 1}: {e}")
+                            continue
+                    
+                    doc.close()
+                    text = "\n".join(texts)
                     
                     document = Document(
                         id=make_document_id(path), 
@@ -208,7 +209,7 @@ def load_documents(paths: Iterable[str]) -> List[Document]:
         loaders: List[DocumentLoader] = [TextFileLoader(), PDFFileLoader(), DOCXFileLoader()]
         all_docs: List[Document] = []
         
-        logger.debug(f"Starting document loading with {len(loaders)} loaders")
+        logger.info(f"📄 Starting document loading with {len(loaders)} loaders")
         
         for i, loader in enumerate(loaders):
             loader_name = loader.__class__.__name__

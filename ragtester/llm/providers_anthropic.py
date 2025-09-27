@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence
+from typing import Any, Sequence, Dict, Optional
+from pathlib import Path
+import traceback
 
 from .base import LLMProvider
 from ..types import LLMMessage
@@ -12,19 +14,40 @@ class AnthropicChat(LLMProvider):
     """
     Anthropic Claude LLM provider using the official Anthropic API.
     Supports Claude 3.5 Sonnet, Claude 3.5 Haiku, and other Claude models.
+    This class uses a singleton pattern to prevent re-initialization.
     """
+    _instances: Dict[str, "AnthropicChat"] = {}
+
+    def __new__(cls, *args, **kwargs):
+        """Create a new instance or return the existing one."""
+        model = kwargs.get('model', 'default_model')
+        instance_key = f"{model}"
+
+        if instance_key not in cls._instances:
+            instance = super(AnthropicChat, cls).__new__(cls)
+            cls._instances[instance_key] = instance
+        return cls._instances[instance_key]
     
     def __init__(self, model: str = "claude-3-5-sonnet-20241022", api_key: str = None, **kwargs: Any) -> None:
         """
-        Initialize Anthropic Claude provider.
+        Initialize Anthropic Claude provider. This will only run once per unique instance.
         
         Args:
             model: Claude model name (e.g., 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022')
             api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY environment variable)
             **kwargs: Additional parameters
         """
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+
+        from ..logging_utils import get_logger
+        self.logger = get_logger()
+
+        self.logger.info("🚀 INITIALIZING ANTHROPIC LLM PROVIDER (first time only)...")
         self.model = model
-        self.api_key = validate_api_key(api_key or os.getenv("ANTHROPIC_API_KEY"), "Anthropic")
+        
+        # Initialize API key with better error handling
+        self.api_key = self._initialize_api_key(api_key)
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -35,12 +58,75 @@ class AnthropicChat(LLMProvider):
         
         # Store other parameters that might be used by the client
         self.client_kwargs = {k: v for k, v in kwargs.items() 
-                             if k not in ['temperature', 'max_tokens', 'top_p']}
-        
-        # API key validation is handled by validate_api_key
+                             if k not in ['temperature', 'max_tokens', 'top_p', 'model', 'api_key']}
         
         # Validate model name
         self.model = self._validate_model()
+        
+        self._client = None
+        self._initialize_client()
+        self._initialized = True
+
+    def _initialize_api_key(self, api_key: Optional[str] = None) -> str:
+        """Initialize API key with better error handling and credential management."""
+        # Try to get API key from various sources
+        if api_key:
+            self.logger.info("💡 Using explicitly provided API key")
+            return api_key
+        
+        # Check environment variable
+        env_key = os.getenv("ANTHROPIC_API_KEY")
+        if env_key:
+            self.logger.info("💡 Using API key from ANTHROPIC_API_KEY environment variable")
+            return env_key
+        
+        # Check for Anthropic configuration file
+        anthropic_config_path = Path.home() / ".anthropic" / "config.json"
+        if anthropic_config_path.exists():
+            try:
+                import json
+                with open(anthropic_config_path, 'r') as f:
+                    config = json.load(f)
+                    if 'api_key' in config:
+                        self.logger.info("💡 Using API key from Anthropic configuration file")
+                        return config['api_key']
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not read Anthropic config file: {e}")
+        
+        # If no API key found, raise error with helpful message
+        self.logger.error("❌ Anthropic API key not found!")
+        self.logger.error("   Please set ANTHROPIC_API_KEY environment variable or pass api_key parameter.")
+        self.logger.error("   You can also create a config file at ~/.anthropic/config.json")
+        raise ValueError("Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter.")
+
+    def _initialize_client(self) -> None:
+        """Initialize the Anthropic client with proper error handling."""
+        self.logger.info("🔧 Initializing Anthropic client...")
+        try:
+            import anthropic
+        except ImportError:
+            self.logger.error("❌ anthropic package is required for Anthropic but is not installed.")
+            raise ImportError("anthropic package is required for Anthropic. Install with: pip install anthropic")
+
+        try:
+            # Initialize client with only client-specific parameters
+            self._client = anthropic.Anthropic(api_key=self.api_key, **self.client_kwargs)
+            self.logger.info("✅ Anthropic client created successfully")
+            
+            # Test the connection by making a simple API call
+            self.logger.info("🔍 Testing Anthropic connection...")
+            # Note: Anthropic doesn't have a models.list() endpoint, so we'll test with a simple completion
+            test_response = self._client.messages.create(
+                model=self.model,
+                max_tokens=1,
+                messages=[{"role": "user", "content": "Hi"}]
+            )
+            self.logger.info("✅ Successfully tested Anthropic connection")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error during Anthropic client initialization: {e}")
+            self.logger.debug(f"Traceback: {traceback.format_exc()}")
+            raise RuntimeError(f"Failed to initialize Anthropic client: {e}")
     
     def _validate_model(self) -> str:
         """Validate the model name format."""
@@ -103,21 +189,17 @@ class AnthropicChat(LLMProvider):
         Returns:
             Generated response text
         """
-        try:
-            import anthropic
-        except ImportError:
-            raise ImportError(
-                "anthropic package is required. Install with: pip install anthropic"
-            )
+        if not hasattr(self, '_initialized') or not self._initialized:
+            self.__init__(**kwargs)
 
-        # Validate messages format
+        self.logger.info(f"💬 Anthropic chat called with {len(messages)} messages")
         validate_messages_format(list(messages), "Anthropic")
+
+        if self._client is None:
+            raise RuntimeError("Anthropic client not initialized")
 
         # Merge chat parameters with any additional kwargs from the call
         merged_chat_params = {**self.chat_params, **kwargs}
-        
-        # Initialize client with only client-specific parameters
-        client = anthropic.Anthropic(api_key=self.api_key, **self.client_kwargs)
         
         # Separate system message and conversation messages
         system_message = ""
@@ -169,10 +251,15 @@ class AnthropicChat(LLMProvider):
             params["stop_sequences"] = merged_chat_params["stop_sequences"]
         
         try:
-            # Make the API call
-            response = client.messages.create(**params)
+            self.logger.info(f"🚀 Invoking Anthropic model: {self.model}")
             
+            # Make the API call
+            response = self._client.messages.create(**params)
+            
+            self.logger.info(f"✅ Successfully extracted response from model.")
             return handle_api_response(response, "Anthropic")
                 
         except Exception as e:
+            self.logger.error(f"❌ Anthropic API call failed: {e}")
+            self.logger.debug(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Anthropic API call failed: {e}")

@@ -6,10 +6,8 @@ from typing import Any, Sequence
 from .base import LLMProvider
 from ..types import LLMMessage
 from .api_utils import (
-    retry_with_backoff, validate_messages_format,
-    handle_api_error, handle_rate_limit_response, test_api_connection,
-    AuthenticationError, RateLimitError, PermissionError, ServerError,
-    ConnectionError, TimeoutError
+    retry_with_backoff,
+    handle_api_error
 )
 
 
@@ -60,7 +58,7 @@ class HuggingFaceChat(LLMProvider):
         ]
         
         if self.model not in popular_models:
-            print(f"Info: Using custom model '{self.model}'. Popular models: {popular_models[:5]}...")
+            self.logger.info(f"Info: Using custom model '{self.model}'. Popular models: {popular_models[:5]}...")
 
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:

@@ -38,27 +38,28 @@ class RandomPageLoader(DocumentLoader):
     def _extract_pages_from_pdf(self, path: str) -> List[str]:
         """Extract all pages from a PDF file."""
         try:
-            import PyPDF2
+            import fitz  # PyMuPDF
         except ImportError:
-            raise ImportError("PyPDF2 is required for PDF processing. Install with: pip install PyPDF2")
+            raise ImportError("PyMuPDF is required for PDF processing. Install with: pip install PyMuPDF")
         
         pages = []
         try:
-            with open(path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
-                # PDF loaded successfully
-                for i, page in enumerate(reader.pages):
-                    try:
-                        text = page.extract_text() or ""
-                        if text.strip():  # Only add non-empty pages
-                            pages.append(text)
-                        else:
-                            pages.append("")  # Empty page if no text
-                    except Exception as e:
-                        print(f"  Page {i+1}: extraction failed - {e}")
-                        pages.append("")  # Empty page if extraction fails
+            doc = fitz.open(path)
+            # PDF loaded successfully
+            for i in range(doc.page_count):
+                try:
+                    page = doc[i]
+                    text = page.get_text() or ""
+                    if text.strip():  # Only add non-empty pages
+                        pages.append(text)
+                    else:
+                        pages.append("")  # Empty page if no text
+                except Exception as e:
+                    logger.debug(f"  Page {i+1}: extraction failed - {e}")
+                    pages.append("")  # Empty page if extraction fails
+            doc.close()
         except Exception as e:
-            print(f"Error reading PDF {path}: {e}")
+            logger.error(f"Error reading PDF {path}: {e}")
             return []
         
         # Pages extracted successfully
@@ -90,7 +91,7 @@ class RandomPageLoader(DocumentLoader):
                     texts.append(paragraph.text.strip())
             return "\n".join(texts)
         except Exception as e:
-            print(f"Error reading DOCX {path}: {e}")
+            logger.error(f"Error reading DOCX {path}: {e}")
             return ""
 
     def _load_document_pages(self, paths: Iterable[str]) -> List[Tuple[str, int, str]]:
@@ -137,7 +138,7 @@ class RandomPageLoader(DocumentLoader):
         all_pages = self._load_document_pages(paths)
         
         if not all_pages:
-            print(f"Warning: No pages loaded from documents: {list(paths)}")
+            logger.warning(f"Warning: No pages loaded from documents: {list(paths)}")
             return []
         
         for doc_id, page_num, _ in all_pages:
@@ -173,7 +174,7 @@ class RandomPageLoader(DocumentLoader):
         
         # Check if we still have no available pages after reset
         if not available:
-            print("Warning: Error selecting random page: Cannot choose from an empty sequence")
+            logger.warning("Warning: Error selecting random page: Cannot choose from an empty sequence")
             raise ValueError("No pages available for selection")
         
         # Randomly select from available pages

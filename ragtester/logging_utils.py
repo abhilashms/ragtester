@@ -9,7 +9,6 @@ import sys
 import time
 import uuid
 import threading
-import os
 import platform
 from typing import Optional, Dict, Any
 from contextlib import contextmanager
@@ -278,8 +277,9 @@ class RAGLogger:
         }
         self.logger.setLevel(level_map.get(config.level, logging.INFO))
         
-        # Clear existing handlers
+        # Clear existing handlers and disable propagation to prevent duplicate logs
         self.logger.handlers.clear()
+        self.logger.propagate = False  # Prevent messages from propagating to parent loggers
         
         # Create formatter with enhanced information
         format_parts = []
@@ -323,6 +323,11 @@ class RAGLogger:
         # Only log configuration success in debug mode to reduce verbosity
         if self.config.level == "DEBUG":
             self.logger.info("RAG Logger configured successfully")
+        
+        # Ensure root logger doesn't interfere with our custom logging
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()  # Clear any existing handlers on root logger
+        root_logger.setLevel(logging.CRITICAL)  # Set root logger to only show critical messages
     
     def debug(self, message: str, **kwargs):
         """Log debug message."""

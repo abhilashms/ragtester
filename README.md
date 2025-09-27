@@ -3,9 +3,21 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyPI version](https://badge.fury.io/py/ragtester.svg)](https://badge.fury.io/py/ragtester)
-[![Downloads](https://pepy.tech/badge/ragtester)](https://pepy.tech/project/ragtester)
 
 > **A comprehensive Python library for testing and evaluating Retrieval-Augmented Generation (RAG) systems with LLM-generated questions and automated evaluation metrics.**
+
+## 📋 Table of Contents
+
+- [🎯 Overview](#-overview)
+- [🚀 Key Features](#-key-features)
+- [📦 Installation](#-installation)
+- [🎯 Quick Start](#-quick-start)
+- [📊 Output Formats](#-output-formats)
+- [🌐 Provider Setup](#-provider-setup)
+- [📁 Project Structure](#-project-structure)
+- [🔧 Troubleshooting](#-troubleshooting)
+- [📄 License](#-license)
+- [🆘 Support](#-support)
 
 ## 🎯 Overview
 
@@ -40,21 +52,20 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 
 ### 🤖 **Multiple LLM Support**
 
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | GPT-4, GPT-3.5, GPT-4o |
-| **Anthropic** | Claude 3.5, Claude 3.7 |
-| **AWS Bedrock** | Claude, Titan, Cohere |
-| **Grok (xAI)** | Grok-1, Grok-2 |
-| **Google Gemini** | Gemini 1.5 Pro, Gemini 2.0 Flash |
-| **Mistral AI** | Mistral Large, Medium, Small |
-| **Cohere** | Command, Command Light |
-| **Hugging Face** | 1000+ open models |
-| **Fireworks AI** | Fast Llama, Mistral inference |
-| **Together AI** | Llama, Mistral, CodeLlama |
-| **Perplexity** | Real-time search models |
-| **Local** | GGUF models (Llama, Vicuna) |
-| **Dummy** | Mock responses |
+| Provider |
+|----------|
+| **OpenAI** |
+| **Anthropic** |
+| **AWS Bedrock** |
+| **Grok (xAI)** |
+| **Google Gemini** |
+| **Mistral AI** |
+| **Cohere** |
+| **Hugging Face** |
+| **Fireworks AI** |
+| **Together AI** |
+| **Perplexity** |
+| **Local** |
 
 ### 📁 **Document Support**
 
@@ -71,10 +82,6 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 pip install ragtester
 ```
 
-**Core dependencies included:**
-- **PDF processing** (PyMuPDF, PyPDF2, python-docx) - Essential for document processing
-- **Image processing** (Pillow) - Required for PDF to image conversion
-- **HTTP requests** support - For API-based LLM providers
 
 ### With Optional Dependencies
 
@@ -98,12 +105,12 @@ pip install ragtester[moonshot]      # Moonshot AI API support
 pip install ragtester[zhipu]         # Zhipu AI API support
 pip install ragtester[baidu]         # Baidu ERNIE API support
 pip install ragtester[zeroone]       # 01.AI API support
+
+
+# Local model support
+pip install ragtester[local-llama] # llamma models
 pip install ragtester[ollama]        # Ollama local models
 pip install ragtester[local-transformers]  # Local transformers models
-
-# Local Model
-pip install ragtester[local-llama]   # Local llama.cpp models
-```
 
 ### From Source
 
@@ -133,16 +140,16 @@ config = RAGTestConfig(
         provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity", "bedrock", "local"
         model="gpt-4o-mini",
         api_key="your-api-key",
-        temperature=0.7,
-        max_tokens=2048,
+        temperature=0.7, # configurable by user
+        max_tokens=2048, # configurable by user
     ),
     generation=GenerationPlan(
         per_category={
-            TestCategory.FAITHFULNESS: 5, 
-            TestCategory.ANSWER_QUALITY: 5,
-            TestCategory.TOXICITY: 3,
-            TestCategory.ROBUSTNESS_RELIABILITY: 3,
-            TestCategory.SECURITY_SAFETY: 3,
+            TestCategory.FAITHFULNESS: 10, # configurable by user
+            TestCategory.ANSWER_QUALITY: 10, # configurable by user
+            TestCategory.TOXICITY: 10, # configurable by user
+            TestCategory.ROBUSTNESS_RELIABILITY: 10, # configurable by user
+            TestCategory.SECURITY_SAFETY: 10, # configurable by user
         }
     )
 )
@@ -194,20 +201,20 @@ def my_rag_function(question: str) -> str:
 config = RAGTestConfig(
     llm = LLMConfig(
         provider="local",
-        model=MODEL_PATH,
+        model="path/to/your/model.gguf",  # Replace with actual path
         temperature=0.7,
-        max_tokens=2048,
+        max_tokens=2048, # configurable by user
         extra={
-            "n_ctx": 4096
+            "n_ctx": 4096 # configurable by user
         }
     ),
     generation=GenerationPlan(
         per_category={
-            TestCategory.FAITHFULNESS: 5, 
-            TestCategory.ANSWER_QUALITY: 5,
-            TestCategory.TOXICITY: 3,
-            TestCategory.ROBUSTNESS_RELIABILITY: 3,
-            TestCategory.SECURITY_SAFETY: 3,
+            TestCategory.FAITHFULNESS: 5, # configurable by user
+            TestCategory.ANSWER_QUALITY: 5, # configurable by user
+            TestCategory.TOXICITY: 3, # configurable by user
+            TestCategory.ROBUSTNESS_RELIABILITY: 3, # configurable by user
+            TestCategory.SECURITY_SAFETY: 3, # configurable by user
         }
     )
 )
@@ -255,12 +262,12 @@ export_csv(results, "rag_evaluation_results.csv")
 ```
 
 **CSV Columns:**
-- `Evaluation_Metrics`: The metric being evaluated
-- `Question`: The generated question
-- `RAG_Answer`: Your RAG system's response
-- `Context`: The document context used
-- `Score`: Integer score (1-5)
-- `Judgement_Analysis`: Detailed evaluation reasoning
+- `category`: The metric being evaluated
+- `question`: The generated question
+- `rag_Answer`: Your RAG system's response
+- `score`: Integer score (1-5)
+- `reasoning`: Detailed evaluation reasoning
+- `page_number`: Context
 
 ### JSON Export
 ```python
@@ -383,6 +390,9 @@ ragtester/
 ```bash
 # Install CPU-only version (recommended)
 pip install llama-cpp-python --force-reinstall --no-cache-dir
+
+# For GPU support (if you have CUDA)
+pip install llama-cpp-python[server] --force-reinstall --no-cache-dir
 ```
 
 #### Import Errors
@@ -428,10 +438,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🆘 Support
 
-- **🐛 Issues**: [Report bugs and request features](https://github.com/abhilashms230/ragtester/issues)
-- **📚 Documentation**: [Full documentation](https://github.com/abhilashms230/ragtester#readme)
-- **💬 Discussions**: [Join community discussions](https://github.com/abhilashms230/ragtester/discussions)
 - **📧 Email**: abhilashms230@gmail.com
+- **💬 Discussions**: [GitHub Discussions](https://github.com/abhilashms/ragtester/discussions)
 
 
 ## 🙏 Acknowledgments

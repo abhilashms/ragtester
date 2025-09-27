@@ -811,7 +811,7 @@ class LLMQuestionGenerator(QuestionGenerator):
             self.logger.warning("No categories with positive question counts specified.")
             return []
         
-        self.logger.debug(f"Starting question generation with {len(document_paths)} documents and {len(valid_categories)} categories")
+        self.logger.info(f"📝 Starting question generation with {len(document_paths)} documents and {len(valid_categories)} categories")
         
         all_questions: List[Question] = []
         
@@ -821,7 +821,7 @@ class LLMQuestionGenerator(QuestionGenerator):
                 # Convert TestCategory to EvaluationMetric
                 metric = EvaluationMetric(category.value)
                 
-                self.logger.debug(f"Starting generation for {category.value}: {num_questions} questions requested")
+                self.logger.info(f"📝 Generating {num_questions} questions for {category.value}")
                 
                 # Generate questions specifically for this metric with retry mechanism
                 metric_questions = self.generate_for_metric(

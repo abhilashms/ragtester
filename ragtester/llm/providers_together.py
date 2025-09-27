@@ -67,7 +67,7 @@ class TogetherChat(LLMProvider):
         ]
         
         if self.model not in popular_models:
-            print(f"Info: Using custom model '{self.model}'. Popular models: {popular_models[:5]}...")
+            self.logger.info(f"Info: Using custom model '{self.model}'. Popular models: {popular_models[:5]}...")
 
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import logging
 import multiprocessing
 import os
@@ -95,9 +95,30 @@ class EvaluationWeights:
 
 @dataclass
 class LoggingConfig:
-    """Configuration for logging behavior in RAG testing."""
+    """
+    Configuration for logging behavior in RAG testing.
+    
+    Log Levels:
+    - DEBUG: All messages (for development/debugging)
+    - INFO: Important progress steps (default - recommended for users)
+    - WARNING: Warnings and potential issues
+    - ERROR: Errors only
+    
+    Examples:
+        # See all important progress (recommended)
+        config = LoggingConfig(level="INFO")
+        
+        # Quiet mode - only warnings and errors
+        config = LoggingConfig(level="WARNING")
+        
+        # Verbose mode - see everything
+        config = LoggingConfig(level="DEBUG")
+        
+        # Disable console output, only log to file
+        config = LoggingConfig(log_to_console=False, log_to_file=True)
+    """
     enabled: bool = True
-    level: str = "WARNING"  # Default to WARNING to reduce console verbosity
+    level: str = "INFO"  # Default to INFO so users can see important progress
     log_to_file: bool = True
     log_file_path: str = "rag_test_debug.log"
     log_to_console: bool = True
@@ -115,6 +136,8 @@ class LoggingConfig:
     include_timestamps: bool = True
     include_thread_info: bool = False
     include_process_info: bool = False
+    # New option for verbose mode
+    verbose_mode: bool = False  # Set to True to see more detailed progress
 
 
 @dataclass

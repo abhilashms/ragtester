@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence
+from typing import Any, Sequence, Dict, Optional
+from pathlib import Path
+import traceback
 
 from .base import LLMProvider
 from ..types import LLMMessage
@@ -12,19 +14,40 @@ class GeminiChat(LLMProvider):
     """
     Google Gemini LLM provider using the Google AI API.
     Supports Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash, and other Gemini models.
+    This class uses a singleton pattern to prevent re-initialization.
     """
+    _instances: Dict[str, "GeminiChat"] = {}
+
+    def __new__(cls, *args, **kwargs):
+        """Create a new instance or return the existing one."""
+        model = kwargs.get('model', 'default_model')
+        instance_key = f"{model}"
+
+        if instance_key not in cls._instances:
+            instance = super(GeminiChat, cls).__new__(cls)
+            cls._instances[instance_key] = instance
+        return cls._instances[instance_key]
     
     def __init__(self, model: str = "gemini-1.5-flash", api_key: str = None, **kwargs: Any) -> None:
         """
-        Initialize Gemini provider.
+        Initialize Gemini provider. This will only run once per unique instance.
         
         Args:
             model: Gemini model name (e.g., 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp')
             api_key: Google AI API key (defaults to GOOGLE_API_KEY environment variable)
             **kwargs: Additional parameters
         """
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+
+        from ..logging_utils import get_logger
+        self.logger = get_logger()
+
+        self.logger.info("🚀 INITIALIZING GEMINI LLM PROVIDER (first time only)...")
         self.model = model
-        self.api_key = validate_api_key(api_key or os.getenv("GOOGLE_API_KEY"), "Google")
+        
+        # Initialize API key with better error handling
+        self.api_key = self._initialize_api_key(api_key)
         
         # Store chat parameters separately from client parameters
         self.chat_params = {
@@ -35,15 +58,46 @@ class GeminiChat(LLMProvider):
         
         # Store other parameters that might be used by the client
         self.client_kwargs = {k: v for k, v in kwargs.items() 
-                             if k not in ['temperature', 'max_tokens', 'top_p']}
-        
-        # API key validation is handled by validate_api_key
+                             if k not in ['temperature', 'max_tokens', 'top_p', 'model', 'api_key']}
         
         # Validate model name
         self.model = self._validate_model()
         
         # Initialize the client
         self._initialize_client()
+        self._initialized = True
+
+    def _initialize_api_key(self, api_key: Optional[str] = None) -> str:
+        """Initialize API key with better error handling and credential management."""
+        # Try to get API key from various sources
+        if api_key:
+            self.logger.info("💡 Using explicitly provided API key")
+            return api_key
+        
+        # Check environment variable
+        env_key = os.getenv("GOOGLE_API_KEY")
+        if env_key:
+            self.logger.info("💡 Using API key from GOOGLE_API_KEY environment variable")
+            return env_key
+        
+        # Check for Google configuration file
+        google_config_path = Path.home() / ".google" / "config.json"
+        if google_config_path.exists():
+            try:
+                import json
+                with open(google_config_path, 'r') as f:
+                    config = json.load(f)
+                    if 'api_key' in config:
+                        self.logger.info("💡 Using API key from Google configuration file")
+                        return config['api_key']
+            except Exception as e:
+                self.logger.warning(f"⚠️ Could not read Google config file: {e}")
+        
+        # If no API key found, raise error with helpful message
+        self.logger.error("❌ Google API key not found!")
+        self.logger.error("   Please set GOOGLE_API_KEY environment variable or pass api_key parameter.")
+        self.logger.error("   You can also create a config file at ~/.google/config.json")
+        raise ValueError("Google API key is required. Set GOOGLE_API_KEY environment variable or pass api_key parameter.")
     
     def _validate_model(self) -> str:
         """Validate the model name format."""
@@ -82,20 +136,34 @@ class GeminiChat(LLMProvider):
         return validate_model_name(self.model, valid_models, "Google Gemini")
     
     def _initialize_client(self) -> None:
-        """Initialize the Google AI client."""
+        """Initialize the Google AI client with proper error handling."""
+        self.logger.info("🔧 Initializing Gemini client...")
         try:
             import google.generativeai as genai
         except ImportError:
+            self.logger.error("❌ google-generativeai package is required for Gemini but is not installed.")
             raise ImportError(
                 "google-generativeai package is required. Install with: pip install google-generativeai"
             )
         
-        # Configure the API key
-        genai.configure(api_key=self.api_key)
-        
-        # Initialize the model
-        self._genai = genai
-        self._client = genai.GenerativeModel(self.model, **self.client_kwargs)
+        try:
+            # Configure the API key
+            genai.configure(api_key=self.api_key)
+            
+            # Initialize the model
+            self._genai = genai
+            self._client = genai.GenerativeModel(self.model, **self.client_kwargs)
+            self.logger.info("✅ Gemini client created successfully")
+            
+            # Test the connection by making a simple API call
+            self.logger.info("🔍 Testing Gemini connection...")
+            test_response = self._client.generate_content("Hi")
+            self.logger.info("✅ Successfully tested Gemini connection")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error during Gemini client initialization: {e}")
+            self.logger.debug(f"Traceback: {traceback.format_exc()}")
+            raise RuntimeError(f"Failed to initialize Gemini client: {e}")
 
     @retry_with_backoff(max_retries=3, exceptions=(Exception,))
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
@@ -109,11 +177,14 @@ class GeminiChat(LLMProvider):
         Returns:
             Generated response text
         """
-        if not hasattr(self, '_client'):
-            self._initialize_client()
-        
-        # Validate messages format
+        if not hasattr(self, '_initialized') or not self._initialized:
+            self.__init__(**kwargs)
+
+        self.logger.info(f"💬 Gemini chat called with {len(messages)} messages")
         validate_messages_format(list(messages), "Google Gemini")
+
+        if self._client is None:
+            raise RuntimeError("Gemini client not initialized")
         
         # Merge chat parameters with any additional kwargs from the call
         merged_chat_params = {**self.chat_params, **kwargs}
@@ -140,6 +211,8 @@ class GeminiChat(LLMProvider):
                 conversation_history.append({"role": "model", "parts": [content]})
         
         try:
+            self.logger.info(f"🚀 Invoking Gemini model: {self.model}")
+            
             # Create generation config
             generation_config = self._genai.types.GenerationConfig(
                 max_output_tokens=merged_chat_params.get("max_tokens", 1024),
@@ -174,7 +247,10 @@ class GeminiChat(LLMProvider):
                     generation_config=generation_config
                 )
             
+            self.logger.info(f"✅ Successfully extracted response from model.")
             return handle_api_response(response, "Google Gemini")
                 
         except Exception as e:
+            self.logger.error(f"❌ Gemini API call failed: {e}")
+            self.logger.debug(f"Traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Gemini API call failed: {e}")

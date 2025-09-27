@@ -3,7 +3,6 @@ Utility functions for ragtester library.
 """
 
 import os
-import sys
 from typing import Optional, List
 
 
@@ -126,29 +125,30 @@ def print_installation_help():
     with logger.operation_context("installation_help"):
         logger.debug("Displaying installation help information")
         
-        print("🔧 ragtester Installation Help")
-        print("=" * 50)
+        # Use logger.info for important user-facing messages
+        logger.info("🔧 ragtester Installation Help")
+        logger.info("=" * 50)
         
         # Check llama-cpp-python
         is_working, error = check_llama_cpp_installation()
         if is_working:
-            print("✅ llama-cpp-python is working correctly")
+            logger.info("✅ llama-cpp-python is working correctly")
             logger.debug("llama-cpp-python installation check passed")
         else:
-            print("❌ llama-cpp-python issue detected:")
-            print(error)
-            print()
+            logger.warning("❌ llama-cpp-python issue detected:")
+            logger.warning(error)
+            logger.warning("")
             logger.warning(f"llama-cpp-python installation issue: {error}")
         
-        print("📦 Installation Commands:")
-        print("• Basic installation: pip install ragtester")
-        print("• With PDF support: pip install ragtester[pdf]")
-        print("• CPU-only llama-cpp: pip install llama-cpp-python --force-reinstall --no-cache-dir")
-        print("• CUDA llama-cpp: pip install llama-cpp-python[cuda] --force-reinstall --no-cache-dir")
-        print()
+        logger.info("📦 Installation Commands:")
+        logger.info("• Basic installation: pip install ragtester")
+        logger.info("• With PDF support: pip install ragtester[pdf]")
+        logger.info("• CPU-only llama-cpp: pip install llama-cpp-python --force-reinstall --no-cache-dir")
+        logger.info("• CUDA llama-cpp: pip install llama-cpp-python[cuda] --force-reinstall --no-cache-dir")
+        logger.info("")
         
-        print("🚀 Quick Start (without local models):")
-        print("""
+        logger.info("🚀 Quick Start (without local models):")
+        quick_start_code = """
 from ragtester import RAGTester, RAGTestConfig, LLMConfig
 from ragtester.types import TestCategory
 
@@ -168,9 +168,10 @@ tester = RAGTester(rag_callable=my_rag_function, config=config)
 tester.upload_documents(["your-document.pdf"])
 results = tester.run_all_tests()
 tester.print_summary(results)
-""")
+"""
+        logger.info(quick_start_code)
         
-        print(suggest_llm_provider_alternatives())
+        logger.info(suggest_llm_provider_alternatives())
         logger.debug("Installation help displayed successfully")
 
 

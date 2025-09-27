@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import random
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional
@@ -14,11 +13,9 @@ from .reporter import export_csv, export_html, export_markdown, to_console, to_j
 from .types import CategoryScorecard, Evaluation, Question, RAGResponse, TestCategory, TestResults
 from .logging_utils import configure_logging
 from .exceptions import (
-    RAGTesterError, DocumentProcessingError, RAGClientError, 
-    QuestionGenerationError, EvaluationError, ValidationError
+    DocumentProcessingError, RAGClientError, ValidationError
 )
 from .error_handling import (
-    retry_on_error, handle_errors, error_context, 
     validate_not_none, validate_not_empty
 )
 
@@ -100,8 +97,8 @@ class RAGTester:
         validate_not_empty(questions, "questions list")
         
         with log_operation("rag_query_batch", total_questions=len(questions)):
-            # Only show RAG query processing in debug mode
-            logger.debug(f"🔍 Processing {len(questions)} RAG queries")
+            # Show RAG query processing progress to users
+            logger.info(f"🔍 Processing {len(questions)} RAG queries")
             
             responses: List[RAGResponse] = []
             successful_queries = 0
@@ -229,7 +226,8 @@ class RAGTester:
         
         with logger.operation_context("print_summary"):
             summary = to_console(results)
-            print(summary)
-            logger.info("Test summary printed to console")
+            logger.info("Test Summary:")
+            logger.info(summary)
+            logger.info("Test summary logged to console")
 
 

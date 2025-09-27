@@ -854,11 +854,11 @@ justification: The response is too vague and doesn't provide meaningful informat
                 if score is None or not isinstance(score, (int, float)) or score < 1.0 or score > 5.0:
                     retry_count += 1
                     if retry_count < max_retries:
-                        print(f"Retry {retry_count}/{max_retries} for {metric.value} - no valid score found: {score}")
+                        self.logger.debug(f"Retry {retry_count}/{max_retries} for {metric.value} - no valid score found: {score}")
                         continue
                     else:
                         # After 3 attempts, return null score
-                        print(f"No valid score found for {metric.value} after {max_retries} retries, using null")
+                        self.logger.warning(f"No valid score found for {metric.value} after {max_retries} retries, using null")
                         return MetricEvaluation(
                             metric=metric,
                             score=None,  # Null score
@@ -919,7 +919,7 @@ justification: The response is too vague and doesn't provide meaningful informat
         Evaluates each response only on the specific metric it was designed for.
         Questions are generated for specific metrics, so we only evaluate on that metric.
         """
-        self.logger.debug(f"Starting evaluation of {len(responses)} RAG responses")
+        self.logger.info(f"🔍 Starting evaluation of {len(responses)} RAG responses")
         evaluations: List[Evaluation] = []
         
         for response in responses:
@@ -993,5 +993,5 @@ justification: The response is too vague and doesn't provide meaningful informat
             
             evaluations.append(evaluation)
         
-        self.logger.debug(f"Completed evaluation of {len(evaluations)} responses")
+        self.logger.info(f"✅ Completed evaluation of {len(evaluations)} responses")
         return evaluations

@@ -57,7 +57,7 @@ class PerplexityChat(LLMProvider):
         ]
         
         if self.model not in valid_models:
-            print(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models[:5]}...")
+            self.logger.warning(f"Warning: Model '{self.model}' may not be available. Valid models: {valid_models[:5]}...")
 
     def chat(self, messages: Sequence[LLMMessage], **kwargs: Any) -> str:
         """

@@ -105,7 +105,7 @@ class LocalLLM(LLMProvider):
             self._model = Llama(**params)
 
         except ImportError:
-            print("⚠️  llama-cpp-python not found. Installing CPU-only version...")
+            self.logger.warning("⚠️  llama-cpp-python not found. Installing CPU-only version...")
             try:
                 import subprocess
                 import sys
@@ -113,7 +113,7 @@ class LocalLLM(LLMProvider):
                     sys.executable, "-m", "pip", "install", 
                     "llama-cpp-python", "--force-reinstall", "--no-cache-dir"
                 ], check=True)
-                print("✅ Successfully installed CPU-only llama-cpp-python!")
+                self.logger.info("✅ Successfully installed CPU-only llama-cpp-python!")
                 # Retry import and initialize
                 from llama_cpp import Llama
                 # Merge with user-provided parameters
@@ -130,7 +130,7 @@ class LocalLLM(LLMProvider):
                 )
         except FileNotFoundError as e:
             if "CUDA" in str(e) or "cuda" in str(e).lower():
-                print("⚠️  CUDA-related error detected. Installing CPU-only llama-cpp-python...")
+                self.logger.warning("⚠️  CUDA-related error detected. Installing CPU-only llama-cpp-python...")
                 try:
                     import subprocess
                     import sys
@@ -138,7 +138,7 @@ class LocalLLM(LLMProvider):
                         sys.executable, "-m", "pip", "install", 
                         "llama-cpp-python", "--force-reinstall", "--no-cache-dir"
                     ], check=True)
-                    print("✅ Successfully installed CPU-only llama-cpp-python!")
+                    self.logger.info("✅ Successfully installed CPU-only llama-cpp-python!")
                     # Retry loading the model
                     from llama_cpp import Llama
                     # Merge with user-provided parameters
