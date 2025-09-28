@@ -21,7 +21,7 @@
 
 ## 🎯 Overview
 
-RAGtester is a powerful evaluation framework designed to assess the quality, reliability, and safety of RAG systems through automated testing. It generates context-aware questions from your documents and evaluates responses across multiple dimensions using state-of-the-art LLM judges.
+RAGtester is like a test suite for your RAG’s answers. You give it your documents (PDFs, text files, Markdown) and your RAG function (or API). It will then generate questions from your docs, ask your RAG system those questions, check the answers for things like accuracy, clarity, and safety, and create reports (CSV, JSON, Markdown). This saves you from writing manual tests or checking answers by hand.
 
 ### Why RAGtester?
 
