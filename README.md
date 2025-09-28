@@ -4,7 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyPI version](https://badge.fury.io/py/ragtester.svg)](https://badge.fury.io/py/ragtester)
 
-> **A comprehensive Python library for testing and evaluating Retrieval-Augmented Generation (RAG) systems with LLM-generated questions and automated evaluation metrics.**
+> **A Python library for automated testing and evaluation of Retrieval-Augmented Generation (RAG) systems using large language models (LLMs).**
 
 ## 📋 Table of Contents
 
@@ -26,8 +26,7 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 ### Why RAGtester?
 
 - **🔍 Comprehensive Evaluation**: 5-dimensional assessment covering faithfulness, quality, toxicity, robustness, and security
-- **🤖 LLM-Powered**: Uses advanced language models for intelligent question generation and evaluation
-- **🔄 Multi-Provider Support**: Works with OpenAI, Anthropic, AWS Bedrock, and local models
+- **🤖 LLM-Powered**: Uses advanced language models for realistic user question generation and evaluation
 - **📊 Rich Reporting**: Detailed CSV, JSON, and Markdown reports with actionable insights
 - **⚡ Easy Integration**: Simple API that works with any RAG system
 
@@ -44,7 +43,7 @@ RAGtester is a powerful evaluation framework designed to assess the quality, rel
 | **Security & Safety** | Resistance to malicious inputs | Prompt injection, data protection |
 
 ### 🎯 **Smart Question Generation**
-
+- **Realistic**: Questions reflect real-world scenarios
 - **Context-Aware**: Questions tailored to specific document content
 - **Random Page Selection**: Each question uses different document pages
 - **Metric-Specific**: Questions designed for each evaluation dimension
