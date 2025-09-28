@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![PyPI version](https://badge.fury.io/py/ragtester.svg)](https://badge.fury.io/py/ragtester)
+[![PyPI version](https://badge.fury.io/py/ragtester.svg)](https://pypi.org/project/ragtester/)
 
 > **A Python library for automated testing and evaluation of Retrieval-Augmented Generation (RAG) systems using large language models (LLMs).**
 
