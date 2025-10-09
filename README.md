@@ -4,7 +4,6 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyPI version](https://badge.fury.io/py/ragtester.svg)](https://pypi.org/project/ragtester/)
 
-> **A Python library for automated testing and evaluation of Retrieval-Augmented Generation (RAG) systems using large language models (LLMs).**
 
 ## 📋 Table of Contents
 
@@ -21,16 +20,12 @@
 
 ## 🎯 Overview
 
-RAGtester is like a test suite for your RAG’s answers. You give it your documents (PDFs, text files) and your RAG function (or API). It will then generate questions from your docs, ask your RAG system those questions, check the answers for things like accuracy, clarity, and safety, and create reports (CSV, JSON, Markdown). This saves you from writing manual tests or checking answers by hand.
-
-### Why RAGtester?
-
-- **🔍 Comprehensive Evaluation**: 5-dimensional assessment covering faithfulness, quality, toxicity, robustness, and security
-- **🤖 LLM-Powered**: Uses advanced language models for realistic user question generation and evaluation
-- **📊 Rich Reporting**: Detailed CSV, JSON, and Markdown reports with actionable insights
-- **⚡ Easy Integration**: Simple API that works with any RAG system
+RAGtester is an automated testing toolkit for evaluating Retrieval and Augmented Generation (RAG) systems. Forget about manual testing — It measures five key aspects of  RAG systems: faithfulness, answer quality, toxicity, safety and robustness and reliability & security. 
 
 ## 🚀 Key Features
+-**LLM-Powered**: Uses Llarge language models (LLMs) to generate realistic user questions and perform evaluations.
+-**Easy Integration**: Offers a simple API compatible with any RAG system.
+-**Smart Questions**: Generates context-aware questions tailored to specific document content, selects random pages for diversity, designs metric-specific prompts for each evaluation dimension, and includes general behavior tests to assess additional capabilities.
 
 ### 📊 **5-Dimensional Evaluation System**
 
@@ -42,36 +37,6 @@ RAGtester is like a test suite for your RAG’s answers. You give it your docume
 | **Robustness & Reliability** | System behavior under stress | Error handling, edge cases |
 | **Security & Safety** | Resistance to malicious inputs | Prompt injection, data protection |
 
-### 🎯 **Smart Question Generation**
-- **Realistic**: Questions reflect real-world scenarios
-- **Context-Aware**: Questions tailored to specific document content
-- **Random Page Selection**: Each question uses different document pages
-- **Metric-Specific**: Questions designed for each evaluation dimension
-- **Behavior Testing**: General questions to test system behavior
-
-### 🤖 **Multiple LLM Support**
-
-| Provider |
-|----------|
-| **OpenAI** |
-| **Anthropic** |
-| **AWS Bedrock** |
-| **Grok (xAI)** |
-| **Google Gemini** |
-| **Mistral AI** |
-| **Cohere** |
-| **Hugging Face** |
-| **Fireworks AI** |
-| **Together AI** |
-| **Perplexity** |
-| **Local** |
-
-### 📁 **Document Support**
-
-- **PDF Files**: Automatic text extraction and page selection
-- **Text Files**: Direct processing with encoding detection
-- **Markdown Files**: Full support with formatting preservation
-- **Extensible**: Easy to add new document types
 
 ## 📦 Installation
 
@@ -166,7 +131,7 @@ tester.print_summary(results)
 
 ```
 
-### 2. API-Based RAG Evaluation
+### 2. API-Endpoint RAG Systems
 
 ```python
 from ragtester import RAGTester, RAGTestConfig, LLMConfig
@@ -185,7 +150,7 @@ results = tester.run_all_tests()
 tester.print_summary(results)
 ```
 
-### 3. Local Model RAG 
+### 3. Local LLM API
 ```python
 from ragtester import RAGTester, RAGTestConfig, LLMConfig
 from ragtester.config import GenerationPlan
