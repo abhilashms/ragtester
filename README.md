@@ -23,6 +23,7 @@
 RAGtester is an automated testing toolkit for evaluating Retrieval and Augmented Generation (RAG) systems. Forget about manual testing — It measures five key aspects of  RAG systems: faithfulness, answer quality, toxicity, safety and robustness and reliability & security. 
 
 ## 🚀 Key Features
+
 -**LLM-Powered**: Uses Llarge language models (LLMs) to generate realistic user questions and perform evaluations.
 -**Easy Integration**: Offers a simple API compatible with any RAG system.
 -**Smart Questions**: Generates context-aware questions tailored to specific document content, selects random pages for diversity, designs metric-specific prompts for each evaluation dimension, and includes general behavior tests to assess additional capabilities.
