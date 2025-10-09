@@ -104,7 +104,7 @@ def my_rag_function(question: str) -> str:
 # Configure the evaluation
 config = RAGTestConfig(
     llm=LLMConfig(
-        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity", "bedrock", "local"
+        provider="openai",  # or "anthropic", "grok", "gemini", "mistral", "cohere", "huggingface", "fireworks", "together", "perplexity", "bedrock".
         model="gpt-4o-mini",
         api_key="your-api-key",
         temperature=0.7, # configurable by user
